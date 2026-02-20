@@ -58,7 +58,7 @@ Wheeler Memory is a functional associative memory system. The implemented compon
 | Hardware detection | `hardware.py` | ✅ Implemented |
 | GPU backend (HIP/ROCm) | `gpu_dynamics.py` | ⚠️ Interface ready, .so not built |
 | LLM integration | — | ❌ Not yet |
-| Associative warming | — | ❌ Not yet |
+| Associative warming | `warming.py` | ✅ Implemented |
 | Eviction / forgetting | — | ❌ Not yet |
 
 ---
@@ -135,6 +135,22 @@ temp  = base × decay
 | `cold` | temp < 0.3 | Dormant, significant decay |
 
 There is no `dead` tier — memories don't get evicted automatically (eviction is future work).
+
+### Associative Warming
+
+When a memory fires (is recalled), its associated neighbors receive a temporary temperature boost — spreading activation that primes related concepts.
+
+- **Associations** form at store time (attractor correlation ≥ 0.5, relevant for embedding mode) and by co-recall (memories appearing together in top-k results)
+- **Hop 1**: Direct neighbors get +0.05 boost
+- **Hop 2**: Neighbors-of-neighbors get +0.025 boost
+- **Decay**: Warmth has a 1-day half-life (fast priming, not permanent)
+- **Cap**: Cumulative warmth per memory capped at 0.15
+
+```
+effective_temp = min(1.0, base_temp + decayed_warmth)
+```
+
+Association graph and warmth state are stored per-chunk in `associations.json`.
 
 ### Epistemic Confidence
 

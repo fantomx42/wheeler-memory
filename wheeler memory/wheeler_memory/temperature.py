@@ -18,6 +18,13 @@ HIT_SATURATION = 10
 TIER_HOT = 0.6
 TIER_WARM = 0.3
 
+# Associative warming constants
+WARMTH_HALF_LIFE_DAYS = 1.0   # Fast decay — warmth is short-term priming
+WARMTH_HOP1 = 0.05            # Boost for direct neighbors
+WARMTH_HOP2 = 0.025           # Boost for neighbors-of-neighbors
+MAX_WARMTH = 0.15             # Cap to prevent runaway accumulation
+WARMTH_FLOOR = 0.001          # Below this, warmth is garbage-collected
+
 
 def compute_temperature(
     hit_count: int,
@@ -70,6 +77,38 @@ def ensure_access_fields(entry: dict, creation_timestamp: str) -> dict:
     if "last_accessed" not in meta:
         meta["last_accessed"] = creation_timestamp
     return entry
+
+
+def compute_warmth(
+    boost: float,
+    applied_at: str | datetime,
+    now: datetime | None = None,
+) -> float:
+    """Compute decayed warmth boost.
+
+    Warmth decays with a 1-day half-life. Returns 0.0 if decayed below floor.
+    """
+    if now is None:
+        now = datetime.now(timezone.utc)
+    if isinstance(applied_at, str):
+        applied_at = datetime.fromisoformat(applied_at)
+    days_since = max(0.0, (now - applied_at).total_seconds() / 86400.0)
+    decayed = boost * 2.0 ** (-days_since / WARMTH_HALF_LIFE_DAYS)
+    return round(decayed, 4) if decayed >= WARMTH_FLOOR else 0.0
+
+
+def effective_temperature(
+    hit_count: int,
+    last_accessed: str | datetime,
+    warmth_boost: float = 0.0,
+    warmth_applied_at: str | datetime | None = None,
+    now: datetime | None = None,
+) -> float:
+    """Compute temperature + decayed warmth, capped at 1.0."""
+    temp = compute_temperature(hit_count, last_accessed, now=now)
+    if warmth_boost > 0.0 and warmth_applied_at is not None:
+        temp += compute_warmth(warmth_boost, warmth_applied_at, now=now)
+    return min(temp, 1.0)
 
 
 def bump_access(entry: dict) -> dict:

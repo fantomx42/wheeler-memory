@@ -18,7 +18,19 @@ from .chunking import (
 )
 from .dynamics import evolve_and_interpret
 from .hashing import hash_to_frame, text_to_hex
-from .temperature import bump_access, compute_temperature, ensure_access_fields, temperature_tier
+from .temperature import (
+    bump_access,
+    compute_temperature,
+    effective_temperature,
+    ensure_access_fields,
+    temperature_tier,
+)
+from .warming import (
+    build_co_recall_associations,
+    build_store_associations,
+    load_warmth,
+    propagate_warmth,
+)
 
 # Lazy import for embedding (optional dependency)
 def _get_embed_to_frame():
@@ -83,6 +95,7 @@ def store_memory(
     }
     _save_index(chunk_dir, index)
     touch_chunk_metadata(chunk_dir, stored=True)
+    build_store_associations(chunk_dir, hex_key)
     return hex_key
 
 
@@ -136,6 +149,7 @@ def recall_memory(
             continue
 
         touch_chunk_metadata(chunk_dir)
+        warmth_data = load_warmth(chunk_dir)
 
         for hex_key, meta in index.items():
             attractor_path = chunk_dir / "attractors" / f"{hex_key}.npy"
@@ -148,9 +162,12 @@ def recall_memory(
             corr, _ = pearsonr(query_flat, attractor.flatten())
             sim = float(corr)
 
-            temp = compute_temperature(
+            w = warmth_data.get(hex_key, {})
+            temp = effective_temperature(
                 meta["metadata"]["hit_count"],
                 meta["metadata"]["last_accessed"],
+                warmth_boost=w.get("boost", 0.0),
+                warmth_applied_at=w.get("applied_at"),
             )
             tier = temperature_tier(temp)
             effective = sim + temperature_boost * temp
@@ -210,6 +227,9 @@ def _bump_recalled_memories(data_dir: Path, results: list[dict]) -> None:
                 changed = True
         if changed:
             _save_index(chunk_dir, index)
+        propagate_warmth(chunk_dir, hex_keys)
+        if len(hex_keys) >= 2:
+            build_co_recall_associations(chunk_dir, hex_keys)
 
 
 def list_memories(
@@ -231,11 +251,15 @@ def list_memories(
         if not chunk_dir.exists():
             continue
         index = _load_index(chunk_dir)
+        warmth_data = load_warmth(chunk_dir)
         for k, v in index.items():
             ensure_access_fields(v, v["timestamp"])
-            temp = compute_temperature(
+            w = warmth_data.get(k, {})
+            temp = effective_temperature(
                 v["metadata"]["hit_count"],
                 v["metadata"]["last_accessed"],
+                warmth_boost=w.get("boost", 0.0),
+                warmth_applied_at=w.get("applied_at"),
             )
             all_memories.append({
                 "hex_key": k,

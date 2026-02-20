@@ -17,11 +17,18 @@ from .storage import list_memories, recall_memory, store_memory
 from .temperature import (
     HALF_LIFE_DAYS,
     HIT_SATURATION,
+    MAX_WARMTH,
     TIER_HOT,
     TIER_WARM,
+    WARMTH_HALF_LIFE_DAYS,
+    WARMTH_HOP1,
+    WARMTH_HOP2,
     compute_temperature,
+    compute_warmth,
+    effective_temperature,
     temperature_tier,
 )
+from .warming import get_neighbors, load_associations
 
 # GPU backend (optional — available only when libwheeler_ca.so is built)
 try:
@@ -64,8 +71,16 @@ __all__ = [
     "temperature_tier",
     "HALF_LIFE_DAYS",
     "HIT_SATURATION",
+    "MAX_WARMTH",
     "TIER_HOT",
     "TIER_WARM",
+    "WARMTH_HALF_LIFE_DAYS",
+    "WARMTH_HOP1",
+    "WARMTH_HOP2",
+    "compute_warmth",
+    "effective_temperature",
+    "get_neighbors",
+    "load_associations",
     # GPU (optional)
     "gpu_available",
     "gpu_evolve_single",
