@@ -393,3 +393,85 @@ for r in results:
         print(f"         stored_corr={r['correlation_with_stored']:.3f}"
               f"  query_corr={r['correlation_with_query']:.3f}")
 ```
+
+---
+
+## Eviction / Forgetting
+
+```python
+from wheeler_memory import (
+    sweep_and_evict,
+    forget_memory,
+    forget_by_text,
+    score_memories,
+    EvictionResult,
+    TIER_FADING,
+    TIER_DEAD,
+    MAX_ATTRACTORS,
+)
+```
+
+### `sweep_and_evict`
+
+```python
+def sweep_and_evict(
+    data_dir: str | Path,
+    dry_run: bool = False,
+) -> EvictionResult:
+```
+
+Run all three eviction phases and return a report.
+
+1. **Fade** — delete `.npz` bricks for memories below `TIER_FADING` (0.05)
+2. **Evict** — fully remove memories below `TIER_DEAD` (0.01)
+3. **Capacity** — if over `MAX_ATTRACTORS` (10,000), evict bottom 10% cold memories
+
+Memories younger than 1 day are never affected.
+
+**Returns** an `EvictionResult`:
+
+| Field | Type | Description |
+|---|---|---|
+| `bricks_deleted` | `list[dict]` | Memories whose bricks were faded |
+| `memories_evicted` | `list[dict]` | Memories fully removed |
+| `total_before` | `int` | Memory count before sweep |
+| `total_after` | `int` | Memory count after sweep |
+
+**Example**
+
+```python
+result = sweep_and_evict("~/.wheeler_memory")
+print(f"Faded {len(result.bricks_deleted)} bricks")
+print(f"Evicted {len(result.memories_evicted)} memories")
+print(f"Total: {result.total_before} → {result.total_after}")
+
+# Dry run — inspect without deleting
+result = sweep_and_evict("~/.wheeler_memory", dry_run=True)
+```
+
+---
+
+### `forget_memory` / `forget_by_text`
+
+```python
+def forget_memory(hex_key: str, data_dir: str | Path) -> bool:
+def forget_by_text(text: str, data_dir: str | Path) -> bool:
+```
+
+Immediately delete a specific memory. Returns `True` if found.
+
+```python
+forget_by_text("fix the python debug error", "~/.wheeler_memory")
+forget_memory("a1b2c3d4...", "~/.wheeler_memory")
+```
+
+---
+
+### `score_memories`
+
+```python
+def score_memories(data_dir: str | Path) -> list[dict]:
+```
+
+Score all memories by effective temperature, sorted coldest-first.
+Each entry contains `hex_key`, `chunk`, `text`, `temperature`, `age_days`, `hit_count`.

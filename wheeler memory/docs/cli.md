@@ -79,3 +79,21 @@ wheeler-temps --chunk code        # specific chunk
 wheeler-temps --tier hot          # filter by tier
 wheeler-temps --sort hits         # sort by hit count
 ```
+
+## Forget / evict memories
+
+```bash
+wheeler-forget                      # full sweep (fade + evict + capacity)
+wheeler-forget --dry-run            # show what would happen
+wheeler-forget --text "some memory" # forget a specific memory
+wheeler-forget --hex abc123...      # forget by hex key
+wheeler-forget --coldest 10         # diagnostic: show 10 coldest memories
+```
+
+The sweep runs three phases:
+
+1. **Fade** — memories below temperature 0.05 have their brick (`.npz` evolution history) deleted. The attractor and index entry remain, so the memory is still recallable but its formation history is lost.
+2. **Evict** — memories below temperature 0.01 are fully removed (attractor, index entry, association edges, warmth).
+3. **Capacity** — if the total memory count exceeds 10,000, the bottom 10% by temperature are evicted (never warm or hot memories).
+
+Memories younger than 1 day are never evicted regardless of temperature.
