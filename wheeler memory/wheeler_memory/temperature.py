@@ -17,6 +17,11 @@ HALF_LIFE_DAYS = 7.0
 HIT_SATURATION = 10
 TIER_HOT = 0.6
 TIER_WARM = 0.3
+TIER_FADING = 0.05          # Below this → brick eligible for deletion
+TIER_DEAD = 0.01            # Below this → full eviction
+MAX_ATTRACTORS = 10_000     # Global capacity across all chunks
+EVICTION_RATIO = 0.10       # Remove bottom 10% when over capacity
+MIN_AGE_DAYS = 1.0          # Never evict memories younger than 1 day
 
 # Associative warming constants
 WARMTH_HALF_LIFE_DAYS = 1.0   # Fast decay — warmth is short-term priming
@@ -64,6 +69,19 @@ def temperature_tier(temp: float) -> str:
     if temp >= TIER_WARM:
         return "warm"
     return "cold"
+
+
+def temperature_tier_detailed(temp: float) -> str:
+    """Classify temperature into hot / warm / cold / fading / dead."""
+    if temp >= TIER_HOT:
+        return "hot"
+    if temp >= TIER_WARM:
+        return "warm"
+    if temp >= TIER_FADING:
+        return "cold"
+    if temp >= TIER_DEAD:
+        return "fading"
+    return "dead"
 
 
 def ensure_access_fields(entry: dict, creation_timestamp: str) -> dict:

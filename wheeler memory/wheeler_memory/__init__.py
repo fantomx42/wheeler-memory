@@ -17,7 +17,10 @@ from .storage import list_memories, recall_memory, store_memory
 from .temperature import (
     HALF_LIFE_DAYS,
     HIT_SATURATION,
+    MAX_ATTRACTORS,
     MAX_WARMTH,
+    TIER_DEAD,
+    TIER_FADING,
     TIER_HOT,
     TIER_WARM,
     WARMTH_HALF_LIFE_DAYS,
@@ -27,6 +30,13 @@ from .temperature import (
     compute_warmth,
     effective_temperature,
     temperature_tier,
+)
+from .eviction import (
+    EvictionResult,
+    forget_by_text,
+    forget_memory,
+    score_memories,
+    sweep_and_evict,
 )
 from .warming import get_neighbors, load_associations
 
@@ -71,7 +81,10 @@ __all__ = [
     "temperature_tier",
     "HALF_LIFE_DAYS",
     "HIT_SATURATION",
+    "MAX_ATTRACTORS",
     "MAX_WARMTH",
+    "TIER_DEAD",
+    "TIER_FADING",
     "TIER_HOT",
     "TIER_WARM",
     "WARMTH_HALF_LIFE_DAYS",
@@ -81,6 +94,12 @@ __all__ = [
     "effective_temperature",
     "get_neighbors",
     "load_associations",
+    # Eviction
+    "sweep_and_evict",
+    "forget_memory",
+    "forget_by_text",
+    "score_memories",
+    "EvictionResult",
     # GPU (optional)
     "gpu_available",
     "gpu_evolve_single",

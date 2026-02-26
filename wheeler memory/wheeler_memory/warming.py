@@ -172,6 +172,34 @@ def build_co_recall_associations(chunk_dir: Path, hex_keys: list[str]) -> int:
 # Warmth propagation
 # ---------------------------------------------------------------------------
 
+def remove_memory_from_associations(chunk_dir: Path, hex_key: str) -> int:
+    """Remove all edges and warmth for a memory. Returns edges removed."""
+    assoc = _load_associations(chunk_dir)
+    edges = assoc.get("edges", {})
+    count = 0
+
+    # Remove edges pointing FROM this key
+    if hex_key in edges:
+        count += len(edges[hex_key])
+        del edges[hex_key]
+
+    # Remove edges pointing TO this key from other nodes
+    for other_key in list(edges.keys()):
+        if hex_key in edges[other_key]:
+            del edges[other_key][hex_key]
+            count += 1
+            # Clean up empty neighbor dicts
+            if not edges[other_key]:
+                del edges[other_key]
+
+    # Remove warmth entry
+    warmth = assoc.get("warmth", {})
+    warmth.pop(hex_key, None)
+
+    _save_associations(chunk_dir, assoc)
+    return count
+
+
 def propagate_warmth(chunk_dir: Path, fired_keys: list[str]) -> dict[str, float]:
     """Spread warmth from fired memories to their neighbors (max 2 hops).
 

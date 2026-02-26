@@ -4,3 +4,4 @@
 - ~~**Embedding-based routing** — semantic similarity for chunk selection instead of keywords~~ ✅ Done
 - ~~**Reconstructive recall** — memories influenced by current context (Darman architecture)~~ ✅ Done
 - ~~**Associative warming** — spreading activation between related memories on recall~~ ✅ Done
+- ~~**Eviction / forgetting** — graceful degradation of cold memories (fade bricks, evict dead, capacity limits)~~ ✅ Done

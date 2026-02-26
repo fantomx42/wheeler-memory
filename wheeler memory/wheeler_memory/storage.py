@@ -65,6 +65,7 @@ def store_memory(
     data_dir: str | Path | None = None,
     *,
     chunk: str | None = None,
+    auto_evict: bool = True,
 ) -> str:
     """Save attractor, brick, and index entry for a memory.
 
@@ -96,6 +97,11 @@ def store_memory(
     _save_index(chunk_dir, index)
     touch_chunk_metadata(chunk_dir, stored=True)
     build_store_associations(chunk_dir, hex_key)
+
+    if auto_evict:
+        from .eviction import evict_for_capacity
+        evict_for_capacity(d)
+
     return hex_key
 
 
