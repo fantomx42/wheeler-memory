@@ -475,3 +475,105 @@ def score_memories(data_dir: str | Path) -> list[dict]:
 
 Score all memories by effective temperature, sorted coldest-first.
 Each entry contains `hex_key`, `chunk`, `text`, `temperature`, `age_days`, `hit_count`.
+
+---
+
+## Sleep Consolidation
+
+```python
+from wheeler_memory import (
+    sleep_consolidate,
+    consolidate_brick,
+    select_keyframes,
+    consolidation_stats,
+    ConsolidationResult,
+)
+```
+
+### `sleep_consolidate`
+
+```python
+def sleep_consolidate(
+    data_dir: str | Path,
+    dry_run: bool = False,
+    chunk: str | None = None,
+) -> ConsolidationResult:
+```
+
+Sweep all chunks (or a specific one) and prune redundant frames within each
+brick. Hot bricks are skipped, warm bricks get light pruning, cold bricks
+get aggressive pruning. Already-consolidated bricks are skipped (idempotent).
+
+**Returns** a `ConsolidationResult`:
+
+| Field | Type | Description |
+|---|---|---|
+| `memories_consolidated` | `list[dict]` | Memories that were pruned |
+| `memories_skipped` | `list[dict]` | Memories skipped (with reason) |
+| `total_frames_before` | `int` | Total frames before consolidation |
+| `total_frames_after` | `int` | Total frames after consolidation |
+
+Each consolidated entry contains `hex_key`, `chunk`, `text`, `frames_before`,
+`frames_after`, `tier`.
+
+**Example**
+
+```python
+# Dry run to preview
+result = sleep_consolidate("~/.wheeler_memory", dry_run=True)
+for m in result.memories_consolidated:
+    print(f"{m['tier']} {m['frames_before']} -> {m['frames_after']}  {m['text']}")
+
+# Actual consolidation
+result = sleep_consolidate("~/.wheeler_memory")
+print(f"Frames: {result.total_frames_before} -> {result.total_frames_after}")
+```
+
+---
+
+### `consolidate_brick`
+
+```python
+def consolidate_brick(
+    brick: MemoryBrick,
+    delta_threshold: float,
+    role_threshold: float,
+) -> MemoryBrick:
+```
+
+Return a new `MemoryBrick` with pruned history. Already-consolidated bricks
+and bricks with fewer than 5 frames are returned unchanged.
+
+Adds metadata: `consolidated`, `consolidated_at`, `original_frame_count`,
+`retained_frame_count`, `frames_pruned`, and the thresholds used.
+
+---
+
+### `select_keyframes`
+
+```python
+def select_keyframes(
+    history: list[np.ndarray],
+    delta_threshold: float,
+    role_threshold: float,
+) -> list[int]:
+```
+
+Pure computation: return sorted list of frame indices to keep. A frame is
+kept if the mean absolute delta or the role-change fraction (vs. last kept
+frame) exceeds the threshold. Frame 0 and the final frame are always kept.
+
+---
+
+### `consolidation_stats`
+
+```python
+def consolidation_stats(
+    data_dir: str | Path,
+    chunk: str | None = None,
+) -> list[dict]:
+```
+
+Read-only: per-memory frame counts and potential savings. Each entry contains
+`hex_key`, `chunk`, `text`, `frame_count`, `temperature`, `tier`,
+`consolidated`, `potential_frames`.

@@ -97,3 +97,22 @@ The sweep runs three phases:
 3. **Capacity** — if the total memory count exceeds 10,000, the bottom 10% by temperature are evicted (never warm or hot memories).
 
 Memories younger than 1 day are never evicted regardless of temperature.
+
+## Sleep consolidation
+
+```bash
+wheeler-sleep                      # consolidate all eligible memories
+wheeler-sleep --dry-run            # show what would be consolidated
+wheeler-sleep --chunk code         # consolidate specific chunk
+wheeler-sleep --stats              # show per-memory frame counts + potential savings
+```
+
+Consolidation prunes redundant intermediate frames *within* each brick, keeping only salient keyframes where the pattern changed significantly. Frame 0 (seed) and the final frame (attractor) are always preserved.
+
+Thresholds are temperature-tiered:
+
+- **Hot (>=0.6)** — skipped entirely (actively used memories)
+- **Warm (>=0.3)** — light pruning (~40-60% frames retained)
+- **Cold (<0.3)** — aggressive pruning (~15-25% frames retained)
+
+Already-consolidated bricks are skipped (idempotent). This is distinct from eviction — consolidation reduces storage while preserving the formation story at key transition points.
