@@ -61,6 +61,7 @@ Wheeler Memory is a functional associative memory system. The implemented compon
 | Eviction / forgetting | `eviction.py` | ✅ Implemented |
 | Sleep consolidation | `consolidation.py` | ✅ Implemented |
 | Attention model (variable ticks) | `attention.py` | ✅ Implemented |
+| Trauma encoding (dual-attractor) | `trauma.py` | ✅ Implemented |
 | LLM integration | — | ❌ Not yet |
 
 ---
@@ -263,6 +264,35 @@ osc = detect_oscillation(history)
 # osc["oscillating_cells"] → count of cycling cells
 ```
 
+### Trauma Encoding
+
+Traumatic events create two linked attractors: **experience** (the event) and **avoidance** (the response). When the experience is recalled, the avoidance automatically co-fires — injected into recall results ranked by suppression strength.
+
+**Therapy mechanics**: Safe exposures (activating the experience without triggering avoidance) gradually decay the suppression link:
+
+1. First 3 safe exposures: counters track but suppression unchanged
+2. After threshold: each safe exposure decays suppression by 15% multiplicatively
+3. Floor: suppression never drops below 0.05 — a trace always remains
+
+```python
+from wheeler_memory import store_trauma_pair, therapy_status
+
+# Create a trauma pair
+result = store_trauma_pair("the car crash", "driving on highways", data_dir="~/.wheeler_memory")
+
+# Recall with automatic avoidance co-fire
+results = recall_memory("car crash")  # avoidance injected
+
+# Therapy: safe exposure mode
+results = recall_memory("car crash", trauma_mode="safe")  # no avoidance, suppression decays
+
+# Check progress
+status = therapy_status(result["pair_id"], "~/.wheeler_memory")
+print(status["status"])  # "active" → "in_therapy" → "resolved"
+```
+
+Status labels: `suppression > 0.5` → "active", `> 0.05` → "in_therapy", `<= 0.05` → "resolved"
+
 ### GPU Backend (HIP/ROCm)
 
 `gpu_dynamics.py` provides a Python interface to a compiled HIP kernel (`libwheeler_ca.so`). The interface matches the CPU API. The kernel supports single-frame and batch evolution.
@@ -328,6 +358,7 @@ wheeler_memory/
 ├── rotation.py        Rotation retry for non-converging seeds
 ├── oscillation.py     Role-space periodicity detection
 ├── hardware.py        CPU/GPU/NPU detection, device selection
+├── trauma.py          Dual-attractor trauma encoding (experience + avoidance pairs)
 ├── gpu_dynamics.py    HIP kernel interface (requires compiled libwheeler_ca.so)
 └── gpu/               HIP kernel source (not compiled)
 
@@ -354,7 +385,8 @@ scripts/
 │   ├── daily_tasks/
 │   ├── meta/
 │   └── general/
-└── rotation_stats.json                per-angle convergence stats
+├── rotation_stats.json                per-angle convergence stats
+└── trauma.json                        trauma pair registry (cross-chunk)
 ```
 
 ### System Flow
@@ -411,6 +443,7 @@ pip install -e ".[embed]"
 - ~~**Eviction / forgetting**~~ — graceful degradation of cold memories (fade, evict, capacity limits) ✅
 - ~~**Sleep consolidation**~~ — prune redundant intermediate frames within bricks ✅
 - ~~**Variable tick rates (attention model)**~~ — salience-driven CA budgets: high-salience inputs get deeper attractor formation ✅
+- ~~**Dual-attractor trauma encoding**~~ — experience + avoidance pairs with therapy mechanics ✅
 
 ### Planned
 
@@ -420,9 +453,6 @@ Connect Wheeler Memory to a local LLM (Ollama/qwen3). The full agent loop:
 query → Wheeler recall → temperature-weighted context → LLM prompt
 response → store as new attractor → warm associated attractors
 ```
-
-#### Dual-Attractor Trauma Encoding
-Traumatic events create two linked attractors: experience + avoidance. The avoidance attractor fires when the experience attractor is recalled. Exposure therapy = repeatedly activating experience in safe context without activating avoidance.
 
 #### GPU at Scale
 When `libwheeler_ca.so` is compiled and larger grids are used (e.g. 1000×1000), the GPU batch evolution path handles parallel attractor formation without storing per-tick history.

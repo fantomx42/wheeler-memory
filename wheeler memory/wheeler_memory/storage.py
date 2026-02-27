@@ -118,6 +118,7 @@ def recall_memory(
     reconstruct: bool = False,
     reconstruct_alpha: float = 0.3,
     salience: float | None = None,
+    trauma_mode: str = "auto",
 ) -> list[dict]:
     """Recall stored memories by Pearson correlation with the query's attractor.
 
@@ -129,6 +130,11 @@ def recall_memory(
     the query attractor and re-evolved through the CA (Darman architecture).
     When salience is set, the query evolution and reconstruction use the
     corresponding attention budget (variable tick rates).
+
+    trauma_mode controls dual-attractor trauma processing:
+      "auto"    — avoidance fires if suppression > floor (default)
+      "safe"    — record safe exposure, no avoidance injection (therapy)
+      "suppress" — skip trauma processing entirely
     """
     d = _get_data_dir(data_dir)
     budget = compute_attention_budget(
@@ -233,6 +239,21 @@ def recall_memory(
             r["correlation_with_query"] = recon["correlation_with_query"]
 
     _bump_recalled_memories(d, top_results)
+
+    # Trauma processing (lazy import, like eviction pattern)
+    if trauma_mode != "suppress" and top_results:
+        from .trauma import (
+            check_trauma_activation,
+            inject_avoidance_results,
+            record_trauma_activation,
+        )
+        recalled_keys = [r["hex_key"] for r in top_results]
+        activations = check_trauma_activation(recalled_keys, d)
+        for act in activations:
+            safe = trauma_mode == "safe"
+            record_trauma_activation(act["pair_id"], d, safe_context=safe)
+        if trauma_mode == "auto" and activations:
+            top_results = inject_avoidance_results(top_results, activations, d)
 
     return top_results
 

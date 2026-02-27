@@ -140,6 +140,10 @@ def _delete_memory_files(data_dir: Path, chunk: str, hex_key: str) -> None:
     # 4. Remove associations and warmth
     remove_memory_from_associations(chunk_dir, hex_key)
 
+    # 5. Remove trauma pair if this memory is a member
+    from .trauma import _cleanup_evicted_memory
+    _cleanup_evicted_memory(data_dir, hex_key)
+
 
 def evict_dead_memories(data_dir: str | Path, dry_run: bool = False) -> list[dict]:
     """Phase 2: fully remove memories below TIER_DEAD (older than MIN_AGE_DAYS)."""

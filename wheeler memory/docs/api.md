@@ -660,6 +660,126 @@ Convert a human label to a numeric salience: `"low"` → 0.2, `"medium"` → 0.5
 
 ---
 
+## Trauma Encoding
+
+```python
+from wheeler_memory import (
+    store_trauma_pair,
+    list_trauma_pairs,
+    therapy_status,
+    remove_trauma_pair,
+)
+```
+
+### `store_trauma_pair`
+
+```python
+def store_trauma_pair(
+    experience_text: str,
+    avoidance_text: str,
+    data_dir: str | Path,
+    *,
+    chunk: str | None = None,
+    use_embedding: bool = False,
+    salience: float | None = None,
+) -> dict:
+```
+
+Store an experience/avoidance trauma pair. Both texts are stored as normal
+memories, then linked in `trauma.json` with a `trauma_pair` association edge.
+
+**Returns** a `dict`:
+
+| Key | Type | Description |
+|---|---|---|
+| `pair_id` | `str` | 12-char hex ID for CLI reference |
+| `experience_hex` | `str` | Hex key of the experience memory |
+| `avoidance_hex` | `str` | Hex key of the avoidance memory |
+| `experience_chunk` | `str` | Chunk where experience is stored |
+| `avoidance_chunk` | `str` | Chunk where avoidance is stored |
+
+**Example**
+
+```python
+result = store_trauma_pair(
+    "the car crash",
+    "driving on highways",
+    data_dir="~/.wheeler_memory",
+)
+print(result["pair_id"])  # "a1b2c3d4e5f6"
+```
+
+---
+
+### `therapy_status`
+
+```python
+def therapy_status(pair_id: str, data_dir: str | Path) -> dict:
+```
+
+Return therapy status for a trauma pair.
+
+**Status labels**:
+- `"active"` — suppression > 0.5
+- `"in_therapy"` — suppression > floor but <= 0.5
+- `"resolved"` — suppression <= floor (0.05)
+
+**Returns** a `dict` with `pair_id`, `status`, `suppression_strength`,
+`activation_count`, `avoidance_co_fire_count`, `safe_exposure_count`,
+`experience`, `avoidance`, `created`, `therapy_history`.
+
+**Example**
+
+```python
+st = therapy_status("a1b2c3d4e5f6", "~/.wheeler_memory")
+print(f"Status: {st['status']}, suppression: {st['suppression_strength']:.2f}")
+```
+
+---
+
+### `list_trauma_pairs`
+
+```python
+def list_trauma_pairs(data_dir: str | Path) -> list[dict]:
+```
+
+List all trauma pairs with status. Each entry contains `pair_id`, `status`,
+`suppression_strength`, `experience_text`, `avoidance_text`, `activation_count`,
+`safe_exposure_count`, `created`.
+
+---
+
+### `remove_trauma_pair`
+
+```python
+def remove_trauma_pair(pair_id: str, data_dir: str | Path) -> bool:
+```
+
+Unlink a trauma pair. Keeps both memories, removes the trauma link and
+clears index metadata. Returns `True` if found.
+
+---
+
+### Trauma-aware recall
+
+The `recall_memory` function accepts a `trauma_mode` parameter:
+
+```python
+# Default: avoidance co-fires automatically
+results = recall_memory("car crash", trauma_mode="auto")
+
+# Therapy: safe exposure, no avoidance injection
+results = recall_memory("car crash", trauma_mode="safe")
+
+# Skip trauma processing entirely
+results = recall_memory("car crash", trauma_mode="suppress")
+```
+
+When avoidance fires, the injected result includes `trauma_avoidance=True`,
+`trauma_pair_id`, and `suppression_strength` fields.
+
+---
+
 ### `salience_from_temperature`
 
 ```python

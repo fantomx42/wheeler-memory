@@ -7,3 +7,4 @@
 - ~~**Eviction / forgetting** — graceful degradation of cold memories (fade bricks, evict dead, capacity limits)~~ ✅ Done
 - ~~**Sleep consolidation** — prune redundant intermediate frames within bricks, keeping only salient keyframes~~ ✅ Done
 - ~~**Variable tick rates (attention model)** — salience-driven CA budgets: high-salience inputs get more iterations and tighter convergence~~ ✅ Done
+- ~~**Dual-attractor trauma encoding** — experience + avoidance pairs with therapy mechanics (suppression decay through safe exposure)~~ ✅ Done

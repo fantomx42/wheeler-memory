@@ -73,7 +73,7 @@ def load_warmth(chunk_dir: Path) -> dict:
 # Edge helpers
 # ---------------------------------------------------------------------------
 
-def _add_edge(assoc: dict, key_a: str, key_b: str, weight: float, source: str) -> None:
+def _add_edge(assoc: dict, key_a: str, key_b: str, weight: float, source: str, **extra) -> None:
     """Add a bidirectional edge to the association graph."""
     now_iso = datetime.now(timezone.utc).isoformat()
     edges = assoc["edges"]
@@ -81,6 +81,7 @@ def _add_edge(assoc: dict, key_a: str, key_b: str, weight: float, source: str) -
         "weight": round(weight, 4),
         "created": now_iso,
         "source": source,
+        **extra,
     }
     edges.setdefault(key_a, {})[key_b] = edge_data
     edges.setdefault(key_b, {})[key_a] = {**edge_data}
