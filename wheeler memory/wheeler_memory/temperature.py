@@ -30,6 +30,14 @@ WARMTH_HOP2 = 0.025           # Boost for neighbors-of-neighbors
 MAX_WARMTH = 0.15             # Cap to prevent runaway accumulation
 WARMTH_FLOOR = 0.001          # Below this, warmth is garbage-collected
 
+# Sleep consolidation constants
+CONSOLIDATION_DELTA_WARM = 0.02   # Mean abs delta threshold for warm bricks
+CONSOLIDATION_DELTA_COLD = 0.05   # Mean abs delta threshold for cold bricks
+CONSOLIDATION_ROLE_WARM = 0.05    # Role-change fraction threshold for warm bricks
+CONSOLIDATION_ROLE_COLD = 0.10    # Role-change fraction threshold for cold bricks
+CONSOLIDATION_MIN_FRAMES = 3     # Minimum frames to keep: seed + 1 keyframe + attractor
+CONSOLIDATION_MIN_HISTORY = 5    # Don't consolidate bricks with fewer frames
+
 
 def compute_temperature(
     hit_count: int,

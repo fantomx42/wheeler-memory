@@ -38,6 +38,13 @@ from .eviction import (
     score_memories,
     sweep_and_evict,
 )
+from .consolidation import (
+    ConsolidationResult,
+    consolidate_brick,
+    consolidation_stats,
+    select_keyframes,
+    sleep_consolidate,
+)
 from .warming import get_neighbors, load_associations
 
 # GPU backend (optional — available only when libwheeler_ca.so is built)
@@ -100,6 +107,12 @@ __all__ = [
     "forget_by_text",
     "score_memories",
     "EvictionResult",
+    # Consolidation
+    "sleep_consolidate",
+    "consolidate_brick",
+    "select_keyframes",
+    "consolidation_stats",
+    "ConsolidationResult",
     # GPU (optional)
     "gpu_available",
     "gpu_evolve_single",

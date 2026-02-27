@@ -27,6 +27,7 @@ wheeler-temps = "scripts.wheeler_temps:main"
 wheeler-bench-gpu = "scripts.bench_gpu:main"
 wheeler-info = "scripts.system_info:main"
 wheeler-forget = "scripts.wheeler_forget:main"
+wheeler-sleep = "scripts.wheeler_sleep:main"
 
 [tool.setuptools.packages.find]
 include = ["wheeler_memory*", "scripts*"]

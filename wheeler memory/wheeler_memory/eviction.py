@@ -4,6 +4,11 @@ Memories follow a lifecycle through temperature tiers:
 
     hot (≥0.6) → warm (≥0.3) → cold (≥0.05) → fading (≥0.01) → dead (<0.01)
 
+Lifecycle order:
+  1. consolidation — prune redundant frames within the brick (see consolidation.py)
+  2. fading — brick (.npz) deleted, attractor + index remain
+  3. eviction — all artifacts removed
+
 - Fading: Brick (.npz) is deleted. Attractor and index entry remain —
   the memory can still be recalled but its formation history is lost.
 - Dead: Attractor, index entry, association edges, and warmth are removed.
