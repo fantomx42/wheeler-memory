@@ -38,6 +38,13 @@ CONSOLIDATION_ROLE_COLD = 0.10    # Role-change fraction threshold for cold bric
 CONSOLIDATION_MIN_FRAMES = 3     # Minimum frames to keep: seed + 1 keyframe + attractor
 CONSOLIDATION_MIN_HISTORY = 5    # Don't consolidate bricks with fewer frames
 
+# Trauma encoding constants
+TRAUMA_INITIAL_SUPPRESSION = 1.0       # Full avoidance co-fire at creation
+TRAUMA_DECAY_PER_SAFE_EXPOSURE = 0.15  # 15% decay per safe exposure past threshold
+TRAUMA_SUPPRESSION_FLOOR = 0.05        # Below this → "resolved" (never fully zero)
+TRAUMA_SAFE_EXPOSURE_THRESHOLD = 3     # First N activations always co-fire
+TRAUMA_AVOIDANCE_TEMP_BOOST = 0.10     # Temp boost to avoidance when experience fires
+
 # Attention model (variable tick rates) constants
 SALIENCE_DEFAULT = 0.5
 SALIENCE_MAX_ITERS_LOW = 200

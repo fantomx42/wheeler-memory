@@ -72,6 +72,20 @@ except ImportError:
 # Reconstructive recall
 from .reconstruction import reconstruct, reconstruct_batch
 
+# Trauma encoding
+from .trauma import (
+    list_trauma_pairs,
+    remove_trauma_pair,
+    store_trauma_pair,
+    therapy_status,
+)
+
+# Theories (optional — compartmentalized experiments)
+try:
+    from . import theories
+except ImportError:
+    theories = None
+
 __all__ = [
     "hash_to_frame",
     "text_to_hex",
@@ -135,5 +149,12 @@ __all__ = [
     "compute_attention_budget",
     "salience_from_label",
     "salience_from_temperature",
+    # Trauma encoding
+    "store_trauma_pair",
+    "list_trauma_pairs",
+    "therapy_status",
+    "remove_trauma_pair",
+    # Theories (optional)
+    "theories",
 ]
 

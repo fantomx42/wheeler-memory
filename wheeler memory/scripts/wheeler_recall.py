@@ -38,6 +38,10 @@ def main():
         "--salience", choices=["low", "medium", "high"], default=None,
         help="Attention level: low (fast/loose), medium (default), high (deep/tight)",
     )
+    parser.add_argument(
+        "--trauma-mode", choices=["auto", "safe", "suppress"], default="auto",
+        help="Trauma processing: auto (default), safe (therapy), suppress (skip)",
+    )
     args = parser.parse_args()
 
     sal = salience_from_label(args.salience) if args.salience else None
@@ -51,6 +55,7 @@ def main():
         reconstruct=args.reconstruct,
         reconstruct_alpha=args.alpha,
         salience=sal,
+        trauma_mode=args.trauma_mode,
     )
 
     if not results:
@@ -75,6 +80,8 @@ def main():
         print("-" * 95)
         for i, r in enumerate(results, 1):
             text_preview = r["text"][:40] + "..." if len(r["text"]) > 40 else r["text"]
+            if r.get("trauma_avoidance"):
+                text_preview = f"[AVOIDANCE] {text_preview}"
             chunk_name = r.get("chunk", "?")
             print(
                 f"{i:<5} {r['similarity']:>10.4f}  "

@@ -113,6 +113,52 @@ The sweep runs three phases:
 
 Memories younger than 1 day are never evicted regardless of temperature.
 
+## Trauma encoding
+
+```bash
+# Store a trauma pair (experience + avoidance)
+wheeler-trauma store "the car crash" --avoidance "driving on highways"
+# Trauma pair stored.
+#   Pair ID:     a1b2c3d4e5f6
+#   Experience:  abc123...  (chunk: general)
+#   Avoidance:   def456...  (chunk: general)
+
+# List all trauma pairs
+wheeler-trauma list
+
+# Show therapy status for a pair
+wheeler-trauma status a1b2c3d4e5f6
+
+# Record a safe exposure (therapy)
+wheeler-trauma expose a1b2c3d4e5f6
+
+# Unlink a pair (keeps memories)
+wheeler-trauma remove a1b2c3d4e5f6
+```
+
+### Trauma-aware recall
+
+```bash
+# Default: avoidance co-fires automatically
+wheeler-recall "car crash"
+
+# Safe exposure mode (therapy): no avoidance injection, records safe exposure
+wheeler-recall --trauma-mode safe "car crash"
+
+# Skip trauma processing entirely
+wheeler-recall --trauma-mode suppress "car crash"
+```
+
+When a recalled memory is the experience half of a trauma pair, the avoidance memory is automatically injected into results (marked `[AVOIDANCE]`). The `--trauma-mode` flag controls this:
+
+| Mode | Avoidance injection | Counters updated |
+|------|---------------------|------------------|
+| `auto` (default) | Yes, if suppression > floor | activation_count incremented |
+| `safe` | No | safe_exposure_count incremented, suppression decays |
+| `suppress` | No | No changes |
+
+Therapy mechanics: after 3 safe exposures, each additional safe exposure decays suppression by 15% multiplicatively. Suppression never reaches zero (floor = 0.05).
+
 ## Sleep consolidation
 
 ```bash
