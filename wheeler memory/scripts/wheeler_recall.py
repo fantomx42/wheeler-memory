@@ -9,6 +9,7 @@ Usage:
 import argparse
 
 from wheeler_memory import recall_memory
+from wheeler_memory.attention import salience_from_label
 
 
 def main():
@@ -33,8 +34,13 @@ def main():
         "--alpha", type=float, default=0.3,
         help="Reconstruction weight: 0=pure memory, 1=pure query (default: 0.3)",
     )
+    parser.add_argument(
+        "--salience", choices=["low", "medium", "high"], default=None,
+        help="Attention level: low (fast/loose), medium (default), high (deep/tight)",
+    )
     args = parser.parse_args()
 
+    sal = salience_from_label(args.salience) if args.salience else None
     results = recall_memory(
         args.query,
         top_k=args.top_k,
@@ -44,6 +50,7 @@ def main():
         use_embedding=args.embed,
         reconstruct=args.reconstruct,
         reconstruct_alpha=args.alpha,
+        salience=sal,
     )
 
     if not results:

@@ -1,5 +1,11 @@
 """Wheeler Memory: cellular automata-based associative memory system."""
 
+from .attention import (
+    AttentionBudget,
+    compute_attention_budget,
+    salience_from_label,
+    salience_from_temperature,
+)
 from .brick import MemoryBrick
 from .chunking import (
     CHUNK_KEYWORDS,
@@ -124,5 +130,10 @@ __all__ = [
     # Reconstructive recall
     "reconstruct",
     "reconstruct_batch",
+    # Attention model
+    "AttentionBudget",
+    "compute_attention_budget",
+    "salience_from_label",
+    "salience_from_temperature",
 ]
 

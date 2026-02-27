@@ -10,26 +10,39 @@ import argparse
 import sys
 
 from wheeler_memory import store_with_rotation_retry
+from wheeler_memory.attention import salience_from_label
 from wheeler_memory.chunking import select_chunk
 
 
-def _embed_store(text, chunk, data_dir):
+def _embed_store(text, chunk, data_dir, salience=None):
     """Store using embedding-based frame generation."""
     import time
+    from wheeler_memory.attention import compute_attention_budget
     from wheeler_memory.embedding import embed_to_frame
     from wheeler_memory.dynamics import evolve_and_interpret
     from wheeler_memory.brick import MemoryBrick
     from wheeler_memory.storage import store_memory
+    from wheeler_memory.temperature import SALIENCE_DEFAULT
+
+    budget = compute_attention_budget(
+        salience if salience is not None else SALIENCE_DEFAULT
+    )
 
     start = time.time()
     frame = embed_to_frame(text)
-    result = evolve_and_interpret(frame)
+    result = evolve_and_interpret(
+        frame, max_iters=budget.max_iters,
+        stability_threshold=budget.stability_threshold,
+    )
     wall_time = time.time() - start
 
     result["metadata"]["rotation_used"] = 0
     result["metadata"]["attempts"] = 1
     result["metadata"]["wall_time_seconds"] = wall_time
     result["metadata"]["frame_mode"] = "embedding"
+    result["metadata"]["salience"] = budget.salience
+    result["metadata"]["attention_label"] = budget.label
+    result["metadata"]["stability_threshold"] = budget.stability_threshold
 
     if result["state"] == "CONVERGED":
         brick = MemoryBrick.from_evolution_result(result, {"input_text": text})
@@ -44,6 +57,10 @@ def main():
     parser.add_argument("--data-dir", default=None, help="Data directory (default: ~/.wheeler_memory)")
     parser.add_argument("--chunk", default=None, help="Target chunk (default: auto-route)")
     parser.add_argument("--embed", action="store_true", help="Use sentence embedding instead of SHA-256 hash")
+    parser.add_argument(
+        "--salience", choices=["low", "medium", "high"], default=None,
+        help="Attention level: low (fast/loose), medium (default), high (deep/tight)",
+    )
     args = parser.parse_args()
 
     text = sys.stdin.read().strip() if args.text == "-" else args.text
@@ -54,11 +71,14 @@ def main():
 
     auto = args.chunk is None
     chunk = args.chunk if args.chunk else select_chunk(text)
+    sal = salience_from_label(args.salience) if args.salience else None
 
     if args.embed:
-        result = _embed_store(text, chunk, args.data_dir)
+        result = _embed_store(text, chunk, args.data_dir, salience=sal)
     else:
-        result = store_with_rotation_retry(text, data_dir=args.data_dir, chunk=chunk)
+        result = store_with_rotation_retry(
+            text, data_dir=args.data_dir, chunk=chunk, salience=sal,
+        )
 
     state = result["state"]
     ticks = result["convergence_ticks"]
@@ -66,11 +86,13 @@ def main():
     attempts = result["metadata"].get("attempts", 1)
     wall = result["metadata"].get("wall_time_seconds", 0)
 
+    salience_label = result["metadata"].get("attention_label", "medium")
     chunk_label = f"{chunk} (auto)" if auto else chunk
     print(f"Chunk:    {chunk_label}")
     print(f"State:    {state}")
     print(f"Ticks:    {ticks}")
     print(f"Rotation: {angle}° (attempt {attempts})")
+    print(f"Salience: {salience_label}")
     print(f"Time:     {wall:.3f}s")
 
     if state == "CONVERGED":
