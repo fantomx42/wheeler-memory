@@ -56,7 +56,7 @@ Wheeler Memory is a functional associative memory system. The implemented compon
 | Rotation retry | `rotation.py` | ✅ Implemented |
 | Oscillation detection | `oscillation.py` | ✅ Implemented |
 | Hardware detection | `hardware.py` | ✅ Implemented |
-| GPU backend (HIP/ROCm) | `gpu_dynamics.py` | ⚠️ Interface ready, .so not built |
+| GPU backend (HIP/ROCm) | `gpu_dynamics.py` | ✅ Built — 70.7× speedup (batch=1000, RX 9070 XT) |
 | Associative warming | `warming.py` | ✅ Implemented |
 | Eviction / forgetting | `eviction.py` | ✅ Implemented |
 | Sleep consolidation | `consolidation.py` | ✅ Implemented |

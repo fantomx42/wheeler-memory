@@ -211,7 +211,7 @@ The GPU path produces numerically identical results to the CPU path
 |---|---|
 | `wheeler_memory/gpu/ca_kernel.hip` | HIP C++ kernel source |
 | `wheeler_memory/gpu/Makefile` | Build script |
-| `wheeler_memory/gpu/libwheeler_ca.so` | Compiled shared library (not in git) |
+| `wheeler_memory/gpu/libwheeler_ca.so` | Compiled shared library (not in git — build with `make`; verified working on RX 9070 XT) |
 | `wheeler_memory/gpu_dynamics.py` | Python `ctypes` bindings |
 | `scripts/bench_gpu.py` | `wheeler-bench-gpu` entry point |
 
