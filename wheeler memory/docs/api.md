@@ -7,6 +7,10 @@ from wheeler_memory import (
     store_with_rotation_retry,
     recall_memory,
     list_memories,
+    AttentionBudget,
+    compute_attention_budget,
+    salience_from_label,
+    salience_from_temperature,
 )
 from wheeler_memory.reconstruction import reconstruct
 from wheeler_memory.embedding import embed_to_frame
@@ -27,6 +31,7 @@ def store_with_rotation_retry(
     *,
     chunk: str | None = None,
     use_embedding: bool = False,
+    salience: float | None = None,
 ) -> dict:
 ```
 
@@ -45,6 +50,7 @@ are exhausted.
 | `data_dir` | `~/.wheeler_memory` | Override the storage root |
 | `chunk` | `None` | Force a specific chunk; auto-routes if `None` |
 | `use_embedding` | `False` | Use sentence embedding instead of SHA-256 |
+| `salience` | `None` | Salience score `[0, 1]` or `None` for default (0.5). Controls CA budget. |
 
 **Returns** a `dict` with:
 
@@ -54,7 +60,7 @@ are exhausted.
 | `attractor` | `np.ndarray` | Final 64×64 attractor frame |
 | `convergence_ticks` | `int` | Ticks until convergence |
 | `history` | `list[np.ndarray]` | All frames from seed to attractor |
-| `metadata` | `dict` | Includes `rotation_used`, `attempts`, `wall_time_seconds` |
+| `metadata` | `dict` | Includes `rotation_used`, `attempts`, `wall_time_seconds`, `salience`, `attention_label`, `stability_threshold` |
 
 **Example**
 
@@ -69,6 +75,13 @@ result = store_with_rotation_retry(
     use_embedding=True,
     chunk="science",
 )
+
+# High-salience store (deeper attractor)
+result = store_with_rotation_retry(
+    "critical architectural decision",
+    salience=0.9,
+)
+print(result["metadata"]["attention_label"])  # "high"
 ```
 
 ---
@@ -86,6 +99,7 @@ def recall_memory(
     use_embedding: bool = False,
     reconstruct: bool = False,
     reconstruct_alpha: float = 0.3,
+    salience: float | None = None,
 ) -> list[dict]:
 ```
 
@@ -105,6 +119,7 @@ Pearson correlation. Returns the `top_k` best matches, sorted by
 | `use_embedding` | `False` | Use sentence embedding for the query frame |
 | `reconstruct` | `False` | Apply Darman reconstruction to each result |
 | `reconstruct_alpha` | `0.3` | Blend factor for reconstruction (0 = pure stored, 1 = pure query) |
+| `salience` | `None` | Salience score `[0, 1]` or `None` for default. Controls CA budget for query evolution and reconstruction. |
 
 **Returns** a `list[dict]`, each entry containing:
 
@@ -577,3 +592,85 @@ def consolidation_stats(
 Read-only: per-memory frame counts and potential savings. Each entry contains
 `hex_key`, `chunk`, `text`, `frame_count`, `temperature`, `tier`,
 `consolidated`, `potential_frames`.
+
+---
+
+## Attention Model (Variable Tick Rates)
+
+```python
+from wheeler_memory import (
+    AttentionBudget,
+    compute_attention_budget,
+    salience_from_label,
+    salience_from_temperature,
+)
+```
+
+### `compute_attention_budget`
+
+```python
+def compute_attention_budget(salience: float) -> AttentionBudget:
+```
+
+Map a salience score `[0, 1]` to an `AttentionBudget` controlling CA evolution
+depth. Salience is clamped to `[0, 1]`.
+
+Interpolation is piecewise linear for `max_iters` and log-linear for
+`stability_threshold` (which spans orders of magnitude).
+
+**Anchor points**
+
+| Salience | max_iters | threshold | Label |
+|----------|-----------|-----------|-------|
+| 0.0 | 200 | 5e-4 | low |
+| 0.5 | 1000 | 1e-4 | medium |
+| 1.0 | 3000 | 1e-6 | high |
+
+`salience=0.5` produces **exactly** the pre-attention-model defaults, so
+omitting salience changes nothing.
+
+**Returns** an `AttentionBudget`:
+
+| Field | Type | Description |
+|---|---|---|
+| `max_iters` | `int` | Maximum CA iterations |
+| `stability_threshold` | `float` | Convergence threshold |
+| `salience` | `float` | The (clamped) salience used |
+| `label` | `str` | `"low"`, `"medium"`, or `"high"` (property) |
+
+**Example**
+
+```python
+budget = compute_attention_budget(0.9)
+print(budget.max_iters)            # 2600
+print(budget.stability_threshold)  # ~3.16e-6
+print(budget.label)                # "high"
+```
+
+---
+
+### `salience_from_label`
+
+```python
+def salience_from_label(label: str) -> float:
+```
+
+Convert a human label to a numeric salience: `"low"` → 0.2, `"medium"` → 0.5,
+`"high"` → 0.9. Unknown labels return 0.5 (default).
+
+---
+
+### `salience_from_temperature`
+
+```python
+def salience_from_temperature(temperature: float) -> float:
+```
+
+Derive salience from a memory's temperature. Used during reconstruction so
+that hot memories automatically get more computational attention.
+
+```
+salience = 0.1 + 0.9 × temperature
+```
+
+`temp=0` → salience 0.1, `temp=1` → salience 1.0.

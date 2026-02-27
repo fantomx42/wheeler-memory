@@ -19,6 +19,8 @@ def reconstruct(
     stored_attractor: np.ndarray,
     query_attractor: np.ndarray,
     alpha: float = 0.3,
+    max_iters: int = 1000,
+    stability_threshold: float = 1e-4,
 ) -> dict:
     """Blend a stored attractor with a query attractor and re-evolve.
 
@@ -27,6 +29,8 @@ def reconstruct(
         query_attractor: The query's attractor (64×64).
         alpha: Reconstruction weight (0=pure memory, 1=pure query).
                Default 0.3 = memory-dominant but context-aware.
+        max_iters: Maximum CA iterations for re-evolution.
+        stability_threshold: Convergence threshold for re-evolution.
 
     Returns:
         dict with:
@@ -44,7 +48,9 @@ def reconstruct(
     blended = (1.0 - alpha) * stored + alpha * query
 
     # Re-evolve the blend through CA to find a new stable state
-    result = evolve_and_interpret(blended)
+    result = evolve_and_interpret(
+        blended, max_iters=max_iters, stability_threshold=stability_threshold
+    )
 
     reconstructed = result["attractor"].flatten()
     stored_flat = stored.flatten()
@@ -73,9 +79,14 @@ def reconstruct_batch(
     stored_attractors: list[np.ndarray],
     query_attractor: np.ndarray,
     alpha: float = 0.3,
+    max_iters: int = 1000,
+    stability_threshold: float = 1e-4,
 ) -> list[dict]:
     """Reconstruct multiple stored memories against the same query context."""
     return [
-        reconstruct(stored, query_attractor, alpha)
+        reconstruct(
+            stored, query_attractor, alpha,
+            max_iters=max_iters, stability_threshold=stability_threshold,
+        )
         for stored in stored_attractors
     ]

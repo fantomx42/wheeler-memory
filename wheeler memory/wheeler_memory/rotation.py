@@ -11,10 +11,12 @@ from pathlib import Path
 
 import numpy as np
 
+from .attention import compute_attention_budget
 from .brick import MemoryBrick
 from .dynamics import evolve_and_interpret
 from .hashing import hash_to_frame
 from .storage import DEFAULT_DATA_DIR, store_memory
+from .temperature import SALIENCE_DEFAULT
 
 def _get_frame_fn(use_embedding: bool):
     if use_embedding:
@@ -54,14 +56,17 @@ def store_with_rotation_retry(
     *,
     chunk: str | None = None,
     use_embedding: bool = False,
+    salience: float | None = None,
 ) -> dict:
     """Try 0/90/180/270 degree rotations, return first converged result.
 
     Returns dict with:
       - state, attractor, convergence_ticks, history, metadata
-      - metadata includes rotation_used, attempts, wall_time_seconds
+      - metadata includes rotation_used, attempts, wall_time_seconds,
+        salience, attention_label, stability_threshold
     """
     d = Path(data_dir) if data_dir else DEFAULT_DATA_DIR
+    budget = compute_attention_budget(salience if salience is not None else SALIENCE_DEFAULT)
     frame_fn = _get_frame_fn(use_embedding)
     base_frame = frame_fn(text)
     angles = [0, 90, 180, 270][:max_rotations]
@@ -72,12 +77,18 @@ def store_with_rotation_retry(
         frame = np.rot90(base_frame, k=k) if k > 0 else base_frame.copy()
 
         start = time.time()
-        result = evolve_and_interpret(frame)
+        result = evolve_and_interpret(
+            frame, max_iters=budget.max_iters,
+            stability_threshold=budget.stability_threshold,
+        )
         wall_time = time.time() - start
 
         result["metadata"]["rotation_used"] = angle
         result["metadata"]["attempts"] = i + 1
         result["metadata"]["wall_time_seconds"] = wall_time
+        result["metadata"]["salience"] = budget.salience
+        result["metadata"]["attention_label"] = budget.label
+        result["metadata"]["stability_threshold"] = budget.stability_threshold
 
         if result["state"] == "CONVERGED":
             update_rotation_stats(angle, True, d)

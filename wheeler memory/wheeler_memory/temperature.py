@@ -38,6 +38,15 @@ CONSOLIDATION_ROLE_COLD = 0.10    # Role-change fraction threshold for cold bric
 CONSOLIDATION_MIN_FRAMES = 3     # Minimum frames to keep: seed + 1 keyframe + attractor
 CONSOLIDATION_MIN_HISTORY = 5    # Don't consolidate bricks with fewer frames
 
+# Attention model (variable tick rates) constants
+SALIENCE_DEFAULT = 0.5
+SALIENCE_MAX_ITERS_LOW = 200
+SALIENCE_MAX_ITERS_MED = 1000
+SALIENCE_MAX_ITERS_HIGH = 3000
+SALIENCE_THRESHOLD_LOW = 5e-4
+SALIENCE_THRESHOLD_MED = 1e-4
+SALIENCE_THRESHOLD_HIGH = 1e-6
+
 
 def compute_temperature(
     hit_count: int,

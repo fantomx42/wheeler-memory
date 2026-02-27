@@ -16,9 +16,11 @@ from .chunking import (
     select_recall_chunks,
     touch_chunk_metadata,
 )
+from .attention import compute_attention_budget, salience_from_temperature
 from .dynamics import evolve_and_interpret
 from .hashing import hash_to_frame, text_to_hex
 from .temperature import (
+    SALIENCE_DEFAULT,
     bump_access,
     compute_temperature,
     effective_temperature,
@@ -115,6 +117,7 @@ def recall_memory(
     use_embedding: bool = False,
     reconstruct: bool = False,
     reconstruct_alpha: float = 0.3,
+    salience: float | None = None,
 ) -> list[dict]:
     """Recall stored memories by Pearson correlation with the query's attractor.
 
@@ -124,8 +127,13 @@ def recall_memory(
     for the query frame, enabling fuzzy semantic recall.
     When reconstruct is True, each recalled memory's attractor is blended with
     the query attractor and re-evolved through the CA (Darman architecture).
+    When salience is set, the query evolution and reconstruction use the
+    corresponding attention budget (variable tick rates).
     """
     d = _get_data_dir(data_dir)
+    budget = compute_attention_budget(
+        salience if salience is not None else SALIENCE_DEFAULT
+    )
 
     if chunk is not None:
         chunks_to_search = [chunk]
@@ -142,7 +150,10 @@ def recall_memory(
         query_frame = embed_fn(text)
     else:
         query_frame = hash_to_frame(text)
-    query_result = evolve_and_interpret(query_frame)
+    query_result = evolve_and_interpret(
+        query_frame, max_iters=budget.max_iters,
+        stability_threshold=budget.stability_threshold,
+    )
     query_flat = query_result["attractor"].flatten()
 
     results = []
@@ -203,7 +214,17 @@ def recall_memory(
             chunk_dir = d / "chunks" / r["chunk"]
             att_path = chunk_dir / "attractors" / f"{r['hex_key']}.npy"
             stored_att = np.load(att_path)
-            recon = _reconstruct(stored_att, query_att, alpha=reconstruct_alpha)
+            # Derive reconstruction salience from explicit or temperature
+            recon_salience = (
+                salience if salience is not None
+                else salience_from_temperature(r["temperature"])
+            )
+            recon_budget = compute_attention_budget(recon_salience)
+            recon = _reconstruct(
+                stored_att, query_att, alpha=reconstruct_alpha,
+                max_iters=recon_budget.max_iters,
+                stability_threshold=recon_budget.stability_threshold,
+            )
             r["reconstructed_attractor"] = recon["attractor"]
             r["reconstruction_state"] = recon["state"]
             r["reconstruction_ticks"] = recon["convergence_ticks"]

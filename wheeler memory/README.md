@@ -57,9 +57,11 @@ Wheeler Memory is a functional associative memory system. The implemented compon
 | Oscillation detection | `oscillation.py` | ✅ Implemented |
 | Hardware detection | `hardware.py` | ✅ Implemented |
 | GPU backend (HIP/ROCm) | `gpu_dynamics.py` | ⚠️ Interface ready, .so not built |
-| LLM integration | — | ❌ Not yet |
 | Associative warming | `warming.py` | ✅ Implemented |
-| Eviction / forgetting | — | ❌ Not yet |
+| Eviction / forgetting | `eviction.py` | ✅ Implemented |
+| Sleep consolidation | `consolidation.py` | ✅ Implemented |
+| Attention model (variable ticks) | `attention.py` | ✅ Implemented |
+| LLM integration | — | ❌ Not yet |
 
 ---
 
@@ -314,6 +316,7 @@ wheeler-bench-gpu
 
 ```
 wheeler_memory/
+├── attention.py       Attention model: salience → CA budget (variable tick rates)
 ├── dynamics.py        CA engine: apply_ca_dynamics(), evolve_and_interpret()
 ├── hashing.py         SHA-256 text-to-frame seeding
 ├── temperature.py     Wall-clock temperature computation and tier classification
@@ -402,31 +405,26 @@ pip install -e ".[embed]"
 
 ## Future Work
 
-These features are designed but not yet implemented:
+### Completed
 
-### LLM Integration (Phase 4)
+- ~~**Associative warming**~~ — spreading activation between related memories on recall ✅
+- ~~**Eviction / forgetting**~~ — graceful degradation of cold memories (fade, evict, capacity limits) ✅
+- ~~**Sleep consolidation**~~ — prune redundant intermediate frames within bricks ✅
+- ~~**Variable tick rates (attention model)**~~ — salience-driven CA budgets: high-salience inputs get deeper attractor formation ✅
+
+### Planned
+
+#### LLM Integration (Phase 4)
 Connect Wheeler Memory to a local LLM (Ollama/qwen3). The full agent loop:
 ```
 query → Wheeler recall → temperature-weighted context → LLM prompt
 response → store as new attractor → warm associated attractors
 ```
 
-### Associative Warming
-When attractor A fires, related attractors B, C get a small temperature boost (+0.05). The association links need to be tracked in the index (currently absent). Maximum propagation depth: 2 hops.
-
-### Eviction / Forgetting
-Currently the index grows unboundedly. Planned: `_evict_coldest()` when over `MAX_ATTRACTORS = 10,000`, removing the bottom 10% by effective temperature.
-
-### Variable Tick Rates (Attention Model)
-High-salience inputs get more CA iterations (deeper attractor formation). Low-salience inputs get fewer. Currently all inputs use `max_iters=1000`.
-
-### Dual-Attractor Trauma Encoding
+#### Dual-Attractor Trauma Encoding
 Traumatic events create two linked attractors: experience + avoidance. The avoidance attractor fires when the experience attractor is recalled. Exposure therapy = repeatedly activating experience in safe context without activating avoidance.
 
-### Sleep Consolidation
-Offline compression of MemoryBricks — redundant intermediate frames are pruned, keeping only salient boundaries. Like playing Tetris: complete lines disappear.
-
-### GPU at Scale
+#### GPU at Scale
 When `libwheeler_ca.so` is compiled and larger grids are used (e.g. 1000×1000), the GPU batch evolution path handles parallel attractor formation without storing per-tick history.
 
 ---

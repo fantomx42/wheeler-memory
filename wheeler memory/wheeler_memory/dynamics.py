@@ -36,7 +36,11 @@ def apply_ca_dynamics(frame: np.ndarray) -> np.ndarray:
     return np.clip(frame + delta, -1, 1)
 
 
-def evolve_and_interpret(frame: np.ndarray, max_iters: int = 1000) -> dict:
+def evolve_and_interpret(
+    frame: np.ndarray,
+    max_iters: int = 1000,
+    stability_threshold: float = 1e-4,
+) -> dict:
     """Run CA evolution until convergence, oscillation, or chaos.
 
     Returns dict with keys:
@@ -46,7 +50,6 @@ def evolve_and_interpret(frame: np.ndarray, max_iters: int = 1000) -> dict:
       - history: list of all frame copies (for brick construction)
       - metadata: additional info (cycle_period, etc.)
     """
-    stability_threshold = 1e-4
     history = [frame.copy()]
 
     for i in range(max_iters):

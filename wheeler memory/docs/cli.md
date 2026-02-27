@@ -14,6 +14,8 @@ wheeler-store "fix the python debug error"
 wheeler-store --chunk hardware "solder the GPIO header"   # explicit chunk
 echo "piped input" | wheeler-store -                       # stdin
 wheeler-store --embed "fuzzy memory"                       # store with semantic embedding
+wheeler-store --salience high "critical insight"           # deep attractor (3000 iters, 1e-6 threshold)
+wheeler-store --salience low "background note"             # fast store (200 iters, 5e-4 threshold)
 ```
 
 ## Recall memories
@@ -28,7 +30,20 @@ wheeler-recall "python bug"
 wheeler-recall --chunk code "debug error"   # search specific chunk
 wheeler-recall --top-k 10 "something"       # more results
 wheeler-recall --embed "debugging issues"   # fuzzy semantic search
+wheeler-recall --salience high "important query"  # more CA patience for query evolution
 ```
+
+### Salience levels
+
+The `--salience` flag controls how much computational attention a store or recall operation receives:
+
+| Level | max_iters | threshold | Use case |
+|-------|-----------|-----------|----------|
+| `low` | 200 | 5e-4 | Bulk ingestion, background notes |
+| `medium` | 1000 | 1e-4 | Default (omitting `--salience` is the same) |
+| `high` | 3000 | 1e-6 | Important memories, deep attractors |
+
+When omitted, salience defaults to `medium` (backwards compatible). For reconstruction, if no explicit salience is given, hot memories automatically get more attention based on their temperature.
 
 ### Temperature-boosted recall
 

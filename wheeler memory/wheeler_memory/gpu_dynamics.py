@@ -60,12 +60,19 @@ def gpu_available() -> bool:
     return _load_lib() is not None
 
 
-def gpu_evolve_single(frame: np.ndarray, max_iters: int = 1000) -> dict:
+def gpu_evolve_single(
+    frame: np.ndarray,
+    max_iters: int = 1000,
+    stability_threshold: float = 1e-4,
+) -> dict:
     """Evolve a single frame on GPU.
 
     Returns dict with same keys as evolve_and_interpret:
       - state, attractor, convergence_ticks, metadata
       - history is NOT available (GPU doesn't store per-tick frames)
+
+    Note: stability_threshold is accepted for API compatibility but
+    ignored — the GPU kernel uses a compiled-in threshold value.
     """
     lib = _load_lib()
     if lib is None:
@@ -97,12 +104,17 @@ def gpu_evolve_single(frame: np.ndarray, max_iters: int = 1000) -> dict:
     }
 
 
-def gpu_evolve_batch(frames: list[np.ndarray], max_iters: int = 1000) -> list[dict]:
+def gpu_evolve_batch(
+    frames: list[np.ndarray],
+    max_iters: int = 1000,
+    stability_threshold: float = 1e-4,
+) -> list[dict]:
     """Evolve a batch of frames on GPU in parallel.
 
     Args:
         frames: list of N 64×64 numpy arrays
         max_iters: max CA iterations
+        stability_threshold: accepted for API compatibility (ignored by GPU)
 
     Returns:
         list of N result dicts (same format as evolve_and_interpret,
