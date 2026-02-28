@@ -62,7 +62,7 @@ Wheeler Memory is a functional associative memory system. The implemented compon
 | Sleep consolidation | `consolidation.py` | ✅ Implemented |
 | Attention model (variable ticks) | `attention.py` | ✅ Implemented |
 | LLM integration (Ollama/qwen3 agent) | `agent.py` | ✅ Implemented |
-| Trauma encoding (dual-attractor) | `trauma.py` | ✅ Implemented |
+| Dual-attractor encoding (opposite polarity) | `trauma.py` | ✅ Implemented |
 | Exposure therapy (safe-context) | `trauma.py` | ✅ Implemented |
 | Web UI (local browser dashboard) | `wheeler_ui.py` | ✅ Implemented |
 
@@ -341,7 +341,7 @@ wheeler_memory/
 ├── oscillation.py     Role-space periodicity detection
 ├── hardware.py        CPU/GPU/NPU detection, device selection
 ├── gpu_dynamics.py    HIP kernel interface (requires compiled libwheeler_ca.so)
-├── trauma.py          Dual-attractor trauma encoding and exposure therapy
+├── trauma.py          Dual-attractor encoding: avoidance = −experience (r = −1.0), exposure therapy
 └── gpu/               HIP kernel source and compiled libwheeler_ca.so
 
 scripts/
@@ -426,7 +426,7 @@ pip install -e ".[embed]"
 - ~~**Sleep consolidation**~~ — prune redundant intermediate frames within bricks ✅
 - ~~**Variable tick rates (attention model)**~~ — salience-driven CA budgets: high-salience inputs get deeper attractor formation ✅
 - ~~**LLM Integration (Phase 4)**~~ — Ollama/qwen3 agent loop: recall → context → LLM → store response ✅
-- ~~**Dual-Attractor Trauma Encoding**~~ — experience + avoidance attractors; `--trauma` flag; exposure therapy via `--safe-context` ✅
+- ~~**Dual-Attractor Encoding**~~ — experience + avoidance attractors (`avoidance = −experience`, Pearson r = −1.0); `--trauma` flag; exposure therapy via `--safe-context` ✅
 - ~~**GPU backend wired into store/recall**~~ — `evolve_and_interpret()` transparently dispatches to GPU when `libwheeler_ca.so` is present (70× speedup on RX 9070 XT) ✅
 
 ### Planned
