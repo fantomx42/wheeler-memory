@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Wheeler Memory - 3D CA Evolution Viewer</title>
+    <style>
+        body,
+        html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background-color: #0d1117;
+            font-family: Inter, Roboto, sans-serif;
+            color: white;
+        }
+
+        #canvas-container {
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+
+        #ui {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            z-index: 10;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 20px;
+            border-radius: 12px;
+            backdrop-filter: blur(10px);
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            width: 300px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+        }
+
+        h1 {
+            margin: 0;
+            font-size: 18px;
+            font-weight: 600;
+            background: linear-gradient(90deg, #4ade80, #3b82f6);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        input[type="text"] {
+            background: rgba(255, min(1), 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            color: white;
+            padding: 10px;
+            border-radius: 6px;
+            outline: none;
+            transition: border-color 0.2s;
+            width: calc(100% - 22px);
+        }
+
+        input[type="text"]:focus {
+            border-color: #3b82f6;
+        }
+
+        button {
+            background: #3b82f6;
+            color: white;
+            border: none;
+            padding: 10px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 500;
+            transition: background 0.2s, transform 0.1s;
+        }
+
+        button:hover {
+            background: #2563eb;
+        }
+
+        button:active {
+            transform: scale(0.98);
+        }
+
+        .stats {
+            font-size: 13px;
+            color: #9ca3af;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 5px;
+        }
+
+        .stats-label {
+            color: #d1d5db;
+        }
+
+        .stats-val {
+            text-align: right;
+            font-family: monospace;
+            color: #4ade80;
+        }
+
+        #status-pill {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: bold;
+            background: #374151;
+            color: #9ca3af;
+            text-align: center;
+            margin-top: 5px;
+        }
+
+        .status-idle {
+            background: #374151 !important;
+            color: #9ca3af !important;
+        }
+
+        .status-running {
+            background: #1e3a8a !important;
+            color: #60a5fa !important;
+        }
+
+        .status-converged {
+            background: #14532d !important;
+            color: #4ade80 !important;
+        }
+
+        .status-chaotic {
+            background: #7f1d1d !important;
+            color: #f87171 !important;
+        }
+    </style>
+    <!-- Use Three.js and OrbitControls -->
+    <script async src="https://unpkg.com/es-module-shims@1.8.0/dist/es-module-shims.js"></script>
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+          "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+        }
+      }
+    </script>
+</head>
+
+<body>
+    <div id="ui">
+        <h1>CA Evolution Viewer</h1>
+        <input type="text" id="seed-input" placeholder="Enter text to evolve..." value="hello world">
+        <button id="btn-evolve">Evolve Memory</button>
+        <div id="status-pill" class="status-idle">IDLE</div>
+        <div class="stats">
+            <span class="stats-label">Tick:</span><span class="stats-val" id="val-tick">0</span>
+            <span class="stats-label">Delta:</span><span class="stats-val" id="val-delta">0.0000</span>
+            <span class="stats-label">FPS:</span><span class="stats-val" id="val-fps">0</span>
+        </div>
+    </div>
+    <div id="canvas-container"></div>
+    <script type="module" src="/static/main.js"></script>
+</body>
+
+</html>
