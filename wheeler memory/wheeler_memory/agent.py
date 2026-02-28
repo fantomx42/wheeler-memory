@@ -285,8 +285,17 @@ class WheelerAgent:
         Wheeler Memory data directory. Uses ~/.wheeler_memory if None.
     max_tool_rounds:
         Safety limit on consecutive tool calls before forcing a response.
+    auto_recall:
+        If True, automatically recall related memories before each turn and
+        inject them as context into the system prompt. Closes the read side
+        of the memory loop without requiring an explicit tool call.
+    auto_store:
+        If True, automatically store each final reply as a new memory after
+        the LLM responds. Closes the write side of the memory loop.
+    auto_recall_k:
+        Number of memories to inject when auto_recall is True (default 3).
     verbose:
-        If True, print tool call info to stdout.
+        If True, print tool call and auto-memory info to stdout.
     """
 
     def __init__(
@@ -295,12 +304,18 @@ class WheelerAgent:
         ollama_url: str = DEFAULT_OLLAMA_URL,
         data_dir: str | Path | None = None,
         max_tool_rounds: int = 10,
+        auto_recall: bool = False,
+        auto_store: bool = False,
+        auto_recall_k: int = 3,
         verbose: bool = False,
     ) -> None:
         self.model = model
         self.ollama_url = ollama_url
         self.data_dir = Path(data_dir) if data_dir else None
         self.max_tool_rounds = max_tool_rounds
+        self.auto_recall = auto_recall
+        self.auto_store = auto_store
+        self.auto_recall_k = auto_recall_k
         self.verbose = verbose
         self._history: list[dict] = []
 
@@ -308,14 +323,56 @@ class WheelerAgent:
         """Clear conversation history."""
         self._history = []
 
+    # ── Auto-memory helpers ───────────────────────────────────────────────────
+
+    def _build_recall_context(self, query: str) -> str | None:
+        """Return a formatted memory-context block, or None if nothing recalled."""
+        try:
+            hits = recall_memory(query, top_k=self.auto_recall_k, data_dir=self.data_dir)
+        except Exception:
+            return None
+        if not hits:
+            return None
+        lines = ["[Recalled memories (injected automatically):]"]
+        for i, h in enumerate(hits, 1):
+            sim = round(h["similarity"], 3)
+            temp = round(h.get("temperature", 0.0), 2)
+            lines.append(f"  {i}. \"{h['text']}\"  (similarity={sim}, temperature={temp})")
+        return "\n".join(lines)
+
+    def _auto_store_reply(self, text: str) -> None:
+        """Store the agent reply as a Wheeler memory (best-effort, silent on error)."""
+        try:
+            _exec_store_memory(text, self.data_dir)
+            if self.verbose:
+                print(f"[auto-store] stored reply ({len(text)} chars)")
+        except Exception as exc:
+            if self.verbose:
+                print(f"[auto-store] failed: {exc}")
+
+    # ── Main loop ─────────────────────────────────────────────────────────────
+
     def run(self, user_message: str) -> str:
         """Process a user message and return the agent's final text reply.
 
         Internally runs the tool-call loop until the LLM produces a plain
         text response or max_tool_rounds is exhausted.
+
+        If auto_recall is True, relevant memories are silently injected into
+        the system context before the LLM sees the message.
+        If auto_store is True, the final reply is silently stored as a memory.
         """
+        # ── Auto-recall: inject relevant memories into system context ─────────
+        system_content = _SYSTEM_PROMPT
+        if self.auto_recall:
+            ctx = self._build_recall_context(user_message)
+            if ctx:
+                system_content = _SYSTEM_PROMPT + "\n\n" + ctx
+                if self.verbose:
+                    print(ctx)
+
         self._history.append({"role": "user", "content": user_message})
-        messages = [{"role": "system", "content": _SYSTEM_PROMPT}] + self._history
+        messages = [{"role": "system", "content": system_content}] + self._history
 
         for _ in range(self.max_tool_rounds):
             resp = _ollama_chat(
@@ -332,10 +389,17 @@ class WheelerAgent:
                 content = msg.get("content", "")
                 self._history.append({"role": "assistant", "content": content})
                 messages.append({"role": "assistant", "content": content})
+                # ── Auto-store: persist the reply as a new memory ─────────────
+                if self.auto_store and content.strip():
+                    self._auto_store_reply(content)
                 return content
 
             # Execute each tool call
-            messages.append({"role": "assistant", "content": msg.get("content", ""), "tool_calls": tool_calls})
+            messages.append({
+                "role": "assistant",
+                "content": msg.get("content", ""),
+                "tool_calls": tool_calls,
+            })
             for tc in tool_calls:
                 fn = tc.get("function", {})
                 name = fn.get("name", "")
@@ -368,4 +432,6 @@ class WheelerAgent:
         )
         content = resp.get("message", {}).get("content", "")
         self._history.append({"role": "assistant", "content": content})
+        if self.auto_store and content.strip():
+            self._auto_store_reply(content)
         return content

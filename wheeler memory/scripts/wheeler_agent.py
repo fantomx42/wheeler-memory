@@ -4,9 +4,16 @@ Usage
 -----
     wheeler-agent "What do you know about the GPU backend?"
     wheeler-agent --interactive
+    wheeler-agent --auto-memory --interactive      # full closed loop
     wheeler-agent --model qwen3:8b "Remember: the project uses ROCm for GPU."
     wheeler-agent --ollama http://192.168.1.10:11434 "Recall anything about sleep."
     wheeler-agent --verbose "Store three facts about cellular automata."
+
+Memory loop flags:
+    --auto-memory    Enable both auto-recall and auto-store (full closed loop).
+    --auto-recall    Silently inject recalled memories as context before each turn.
+    --auto-store     Silently store each agent reply as a new memory.
+    --recall-k N     Number of memories to inject per turn (default: 3).
 
 In interactive mode, type 'exit' or 'quit' to leave. Type '/reset' to clear
 conversation history, '/history' to see the current exchange.
@@ -65,17 +72,45 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         metavar="N",
         help="Max tool-call rounds per turn (default: 10).",
     )
+    p.add_argument(
+        "--auto-memory",
+        action="store_true",
+        help="Enable both --auto-recall and --auto-store (full closed loop).",
+    )
+    p.add_argument(
+        "--auto-recall",
+        action="store_true",
+        help="Inject recalled memories as context before each turn.",
+    )
+    p.add_argument(
+        "--auto-store",
+        action="store_true",
+        help="Store each agent reply as a new memory after responding.",
+    )
+    p.add_argument(
+        "--recall-k",
+        type=int,
+        default=3,
+        metavar="N",
+        help="Memories to inject per turn when --auto-recall is active (default: 3).",
+    )
     return p.parse_args(argv)
 
 
 def main(argv: list[str] | None = None) -> None:
     args = _parse_args(argv)
 
+    do_recall = args.auto_recall or args.auto_memory
+    do_store = args.auto_store or args.auto_memory
+
     agent = WheelerAgent(
         model=args.model,
         ollama_url=args.ollama,
         data_dir=args.data_dir,
         max_tool_rounds=args.max_rounds,
+        auto_recall=do_recall,
+        auto_store=do_store,
+        auto_recall_k=args.recall_k,
         verbose=args.verbose,
     )
 
