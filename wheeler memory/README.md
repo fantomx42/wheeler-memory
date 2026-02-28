@@ -61,7 +61,8 @@ Wheeler Memory is a functional associative memory system. The implemented compon
 | Eviction / forgetting | `eviction.py` | ✅ Implemented |
 | Sleep consolidation | `consolidation.py` | ✅ Implemented |
 | Attention model (variable ticks) | `attention.py` | ✅ Implemented |
-| LLM integration | — | ❌ Not yet |
+| LLM integration (Ollama/qwen3 agent) | `agent.py` | ✅ Implemented |
+| Web UI (local browser dashboard) | `wheeler_ui.py` | ✅ Implemented |
 
 ---
 

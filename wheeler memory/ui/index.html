@@ -1,0 +1,963 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Wheeler Memory</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* ============================================================
+   DESIGN SYSTEM (verbatim from demo/index.html)
+   ============================================================ */
+:root {
+  --bg-primary: #0a0a0f;
+  --bg-secondary: #12121a;
+  --bg-card: rgba(20, 20, 35, 0.7);
+  --bg-card-hover: rgba(30, 30, 50, 0.8);
+  --border-subtle: rgba(255, 255, 255, 0.06);
+  --border-glow: rgba(120, 80, 255, 0.3);
+
+  --text-primary: #e8e6f0;
+  --text-secondary: #9590a8;
+  --text-muted: #5d5875;
+
+  --accent-violet: #8b5cf6;
+  --accent-violet-dim: rgba(139, 92, 246, 0.15);
+  --accent-cyan: #06d6a0;
+  --accent-cyan-dim: rgba(6, 214, 160, 0.15);
+  --accent-magenta: #e040a0;
+  --accent-magenta-dim: rgba(224, 64, 160, 0.15);
+  --accent-amber: #f59e0b;
+
+  --gradient-hero: linear-gradient(135deg, #0a0a0f 0%, #1a1030 50%, #0a0a0f 100%);
+  --gradient-card: linear-gradient(135deg, rgba(139,92,246,0.08) 0%, rgba(6,214,160,0.04) 100%);
+
+  --radius-sm: 8px;
+  --radius-md: 14px;
+  --radius-lg: 20px;
+
+  --shadow-card: 0 4px 24px rgba(0,0,0,0.4), 0 0 1px rgba(139,92,246,0.2);
+  --shadow-glow: 0 0 40px rgba(139,92,246,0.15);
+
+  --font-sans: 'Inter', -apple-system, sans-serif;
+  --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+.card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  padding: 32px;
+  backdrop-filter: blur(20px);
+  box-shadow: var(--shadow-card);
+  transition: border-color 0.3s, box-shadow 0.3s;
+}
+
+.card:hover {
+  border-color: var(--border-glow);
+  box-shadow: var(--shadow-card), var(--shadow-glow);
+}
+
+.text-input {
+  background: rgba(255,255,255,0.05);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  padding: 12px 16px;
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: 0.9rem;
+  transition: border-color 0.2s;
+  outline: none;
+  width: 100%;
+}
+
+.text-input:focus {
+  border-color: var(--accent-violet);
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 20px;
+  border: none;
+  border-radius: var(--radius-sm);
+  font-family: var(--font-sans);
+  font-weight: 600;
+  font-size: 0.875rem;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-primary {
+  background: linear-gradient(135deg, var(--accent-violet), #6d28d9);
+  color: white;
+  box-shadow: 0 4px 16px rgba(139,92,246,0.3);
+}
+
+.btn-primary:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 24px rgba(139,92,246,0.45);
+}
+
+.btn-primary:active { transform: translateY(0); }
+
+.btn-secondary {
+  background: rgba(255,255,255,0.06);
+  color: var(--text-secondary);
+  border: 1px solid var(--border-subtle);
+}
+
+.btn-secondary:hover {
+  background: rgba(255,255,255,0.1);
+  color: var(--text-primary);
+}
+
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none !important;
+}
+
+.stat-box {
+  background: rgba(255,255,255,0.03);
+  border-radius: var(--radius-sm);
+  padding: 12px;
+  text-align: center;
+}
+
+.stat-box .stat-value {
+  font-family: var(--font-mono);
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--accent-cyan);
+}
+
+.stat-box .stat-label {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+  margin-top: 4px;
+}
+
+.state-badge {
+  display: inline-block;
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.state-idle     { background: rgba(255,255,255,0.05); color: var(--text-muted); }
+.state-evolving { background: var(--accent-violet-dim); color: var(--accent-violet); animation: pulse 1s ease-in-out infinite; }
+.state-converged { background: var(--accent-cyan-dim); color: var(--accent-cyan); }
+.state-oscillating { background: rgba(245,158,11,0.15); color: var(--accent-amber); }
+.state-chaotic  { background: var(--accent-magenta-dim); color: var(--accent-magenta); }
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+
+/* ============================================================
+   APP LAYOUT
+   ============================================================ */
+html, body {
+  height: 100%;
+  font-family: var(--font-sans);
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  -webkit-font-smoothing: antialiased;
+  overflow: hidden;
+}
+
+body {
+  display: flex;
+  flex-direction: column;
+}
+
+.app-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 20px;
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border-subtle);
+  flex-shrink: 0;
+  gap: 12px;
+}
+
+.app-title {
+  font-weight: 800;
+  font-size: 1rem;
+  letter-spacing: -0.02em;
+  background: linear-gradient(135deg, var(--accent-violet) 0%, var(--accent-cyan) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent-cyan);
+  flex-shrink: 0;
+  transition: background 0.3s;
+}
+
+.status-dot.busy { background: var(--accent-violet); animation: pulse 1s ease-in-out infinite; }
+.status-dot.error { background: var(--accent-magenta); }
+
+.app-body {
+  display: grid;
+  grid-template-columns: 38% 62%;
+  flex: 1;
+  overflow: hidden;
+  min-height: 0;
+}
+
+/* ============================================================
+   LEFT PANEL
+   ============================================================ */
+.left-panel {
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid var(--border-subtle);
+  overflow: hidden;
+}
+
+.left-top {
+  padding: 14px;
+  flex-shrink: 0;
+  border-bottom: 1px solid var(--border-subtle);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.action-row {
+  display: flex;
+  gap: 8px;
+}
+
+.action-row .btn { flex: 1; }
+
+.status-row {
+  min-height: 26px;
+  display: flex;
+  align-items: center;
+}
+
+#statusBadge {
+  display: none;
+}
+
+.left-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 10px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--accent-violet) transparent;
+}
+
+.list-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+  padding: 2px 2px 6px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.list-count {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+}
+
+.btn-xs {
+  padding: 4px 10px;
+  font-size: 0.75rem;
+}
+
+/* Memory list items */
+.memory-item {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 10px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  border: 1px solid transparent;
+  margin-bottom: 3px;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.memory-item:hover {
+  background: rgba(255,255,255,0.04);
+}
+
+.memory-item.selected {
+  background: var(--accent-violet-dim);
+  border-color: var(--border-glow);
+}
+
+.memory-text {
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+  min-width: 0;
+}
+
+/* Tier badges */
+.tier-badge {
+  display: inline-block;
+  padding: 2px 7px;
+  border-radius: 10px;
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: 0.62rem;
+  flex-shrink: 0;
+  text-transform: uppercase;
+}
+
+.tier-hot  { background: rgba(239,68,68,0.2);  color: #ef4444; }
+.tier-warm { background: rgba(245,158,11,0.2); color: var(--accent-amber); }
+.tier-cold { background: rgba(6,214,160,0.15); color: var(--accent-cyan); }
+
+/* Similarity badge (recall mode) */
+.sim-badge {
+  display: inline-block;
+  padding: 2px 7px;
+  border-radius: 10px;
+  background: var(--accent-violet-dim);
+  color: var(--accent-violet);
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.empty-msg {
+  color: var(--text-muted);
+  font-size: 0.82rem;
+  text-align: center;
+  padding: 28px 12px;
+  font-style: italic;
+}
+
+/* ============================================================
+   RIGHT PANEL
+   ============================================================ */
+.right-panel {
+  overflow-y: auto;
+  padding: 20px 24px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--accent-violet) transparent;
+}
+
+.empty-state {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 80%;
+  color: var(--text-muted);
+  font-size: 0.88rem;
+  font-style: italic;
+}
+
+/* Detail view */
+.detail-label {
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--text-muted);
+  margin-bottom: 6px;
+}
+
+.detail-text-box {
+  background: rgba(255,255,255,0.03);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  padding: 12px 14px;
+  font-size: 0.9rem;
+  line-height: 1.6;
+  word-break: break-word;
+  margin-bottom: 16px;
+  color: var(--text-primary);
+}
+
+.detail-meta {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.detail-chunk-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.chunk-label {
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+}
+
+.attractor-wrap {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 16px;
+  background: rgba(0,0,0,0.3);
+  border-radius: var(--radius-md);
+  padding: 12px;
+}
+
+.attractor-canvas {
+  width: 192px;
+  height: 192px;
+  image-rendering: pixelated;
+  border-radius: 6px;
+}
+
+.detail-section {
+  margin-bottom: 20px;
+}
+
+.btn-danger {
+  background: rgba(239,68,68,0.12);
+  color: #ef4444;
+  border: 1px solid rgba(239,68,68,0.25);
+}
+
+.btn-danger:hover {
+  background: rgba(239,68,68,0.22);
+}
+
+textarea.text-input {
+  resize: vertical;
+  min-height: 72px;
+  max-height: 160px;
+  line-height: 1.5;
+}
+</style>
+</head>
+<body>
+
+<!-- Header -->
+<header class="app-header">
+  <span class="app-title">Wheeler Memory</span>
+  <div class="header-actions">
+    <button class="btn btn-secondary btn-xs" onclick="runSleep()">Sleep</button>
+    <span id="statusDot" class="status-dot" title="Ready"></span>
+  </div>
+</header>
+
+<!-- Two-panel body -->
+<div class="app-body">
+
+  <!-- LEFT PANEL -->
+  <div class="left-panel">
+    <div class="left-top">
+      <textarea id="inputText" class="text-input" rows="3"
+        placeholder="Type a memory to store, or a query to recall…"
+        onkeydown="handleInputKey(event)"></textarea>
+      <div class="action-row">
+        <button class="btn btn-primary" onclick="storeMemory()">Store</button>
+        <button class="btn btn-secondary" onclick="searchMemory()">Recall</button>
+      </div>
+      <div class="status-row">
+        <span id="statusBadge" class="state-badge state-idle"></span>
+      </div>
+    </div>
+
+    <div class="left-list">
+      <div class="list-header">
+        <span class="list-count" id="memoryCount">loading…</span>
+        <button class="btn btn-secondary btn-xs" onclick="loadMemories()">Refresh</button>
+      </div>
+      <div id="memoryList"></div>
+    </div>
+  </div>
+
+  <!-- RIGHT PANEL -->
+  <div class="right-panel" id="rightPanel">
+    <div id="emptyState" class="empty-state">
+      <span>Click a memory to inspect it</span>
+    </div>
+    <div id="detailView" style="display:none;">
+      <div class="detail-section">
+        <div class="detail-label">Text</div>
+        <div class="detail-text-box" id="detailText"></div>
+      </div>
+      <div class="detail-meta">
+        <div class="stat-box">
+          <div class="stat-value" id="detailTemp">—</div>
+          <div class="stat-label">Temperature</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-value" id="detailTicks">—</div>
+          <div class="stat-label">Ticks</div>
+        </div>
+        <div class="stat-box">
+          <div style="display:flex;justify-content:center;align-items:center;min-height:1.4rem;">
+            <span id="detailState" class="state-badge state-idle">—</span>
+          </div>
+          <div class="stat-label" style="margin-top:6px;">State</div>
+        </div>
+      </div>
+      <div class="detail-chunk-row">
+        <span id="detailTier" class="tier-badge tier-cold">COLD</span>
+        <span id="detailChunk" class="chunk-label">general</span>
+      </div>
+      <div class="attractor-wrap">
+        <canvas id="attractorCanvas" width="64" height="64" class="attractor-canvas"></canvas>
+      </div>
+      <button class="btn btn-danger" onclick="forgetSelected()">Forget this memory</button>
+    </div>
+  </div>
+
+</div>
+
+<!-- ============================================================
+     JAVASCRIPT ENGINE (verbatim from demo/index.html)
+     ============================================================ -->
+<script>
+// ============================================================
+// SHA-256 HASHING → SEED FRAME
+// ============================================================
+
+async function sha256(text) {
+  const encoder = new TextEncoder();
+  const data = encoder.encode(text);
+  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+  return new Uint8Array(hashBuffer);
+}
+
+// Mulberry32 PRNG - deterministic from a 32-bit seed
+function mulberry32(seed) {
+  return function() {
+    seed |= 0;
+    seed = seed + 0x6D2B79F5 | 0;
+    let t = Math.imul(seed ^ seed >>> 15, 1 | seed);
+    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  };
+}
+
+async function textToFrame(text, size = 64) {
+  const digest = await sha256(text);
+  // Use first 4 bytes as seed (matching Python's first 8 bytes → int approach)
+  const seed = (digest[0] << 24) | (digest[1] << 16) | (digest[2] << 8) | digest[3];
+  const rng = mulberry32(seed);
+
+  const frame = new Float32Array(size * size);
+  for (let i = 0; i < size * size; i++) {
+    frame[i] = rng() * 2 - 1; // uniform(-1, 1)
+  }
+  return frame;
+}
+
+// ============================================================
+// 3-STATE CA DYNAMICS ENGINE
+// ============================================================
+
+const SIZE = 64;
+
+function applyCADynamics(frame) {
+  const next = new Float32Array(SIZE * SIZE);
+
+  for (let y = 0; y < SIZE; y++) {
+    for (let x = 0; x < SIZE; x++) {
+      const idx = y * SIZE + x;
+      const cell = frame[idx];
+
+      // Von Neumann neighbors (wrapping)
+      const up    = frame[((y - 1 + SIZE) % SIZE) * SIZE + x];
+      const down  = frame[((y + 1) % SIZE) * SIZE + x];
+      const left  = frame[y * SIZE + ((x - 1 + SIZE) % SIZE)];
+      const right = frame[y * SIZE + ((x + 1) % SIZE)];
+
+      const isMax = cell >= up && cell >= down && cell >= left && cell >= right;
+      const isMin = cell <= up && cell <= down && cell <= left && cell <= right;
+
+      let delta;
+      if (isMax) {
+        delta = (1 - cell) * 0.35;
+      } else if (isMin) {
+        delta = (-1 - cell) * 0.35;
+      } else {
+        const maxNeighbor = Math.max(up, down, left, right);
+        delta = (maxNeighbor - cell) * 0.20;
+      }
+
+      next[idx] = Math.max(-1, Math.min(1, cell + delta));
+    }
+  }
+  return next;
+}
+
+function pearsonCorrelation(a, b) {
+  const n = a.length;
+  let sumA = 0, sumB = 0, sumAB = 0, sumA2 = 0, sumB2 = 0;
+  for (let i = 0; i < n; i++) {
+    sumA += a[i];
+    sumB += b[i];
+    sumAB += a[i] * b[i];
+    sumA2 += a[i] * a[i];
+    sumB2 += b[i] * b[i];
+  }
+  const num = n * sumAB - sumA * sumB;
+  const den = Math.sqrt((n * sumA2 - sumA * sumA) * (n * sumB2 - sumB * sumB));
+  if (den === 0) return 0;
+  return num / den;
+}
+
+// ============================================================
+// CANVAS RENDERING
+// ============================================================
+
+function renderFrame(canvas, frame) {
+  const ctx = canvas.getContext('2d');
+  const imageData = ctx.createImageData(SIZE, SIZE);
+
+  for (let i = 0; i < SIZE * SIZE; i++) {
+    const v = frame[i]; // -1 to +1
+    const t = (v + 1) / 2; // 0 to 1
+
+    let r, g, b;
+    if (t < 0.5) {
+      // Blue → dark (min → mid)
+      const s = t * 2;
+      r = Math.floor(20 + s * 15);
+      g = Math.floor(10 + s * 50);
+      b = Math.floor(120 + s * 80);
+    } else {
+      // Dark → cyan/hot (mid → max)
+      const s = (t - 0.5) * 2;
+      r = Math.floor(35 + s * 180);
+      g = Math.floor(60 + s * 170);
+      b = Math.floor(200 - s * 50);
+    }
+
+    const px = i * 4;
+    imageData.data[px] = r;
+    imageData.data[px + 1] = g;
+    imageData.data[px + 2] = b;
+    imageData.data[px + 3] = 255;
+  }
+
+  ctx.putImageData(imageData, 0, 0);
+}
+
+// ============================================================
+// APP STATE
+// ============================================================
+
+let allMemories = [];       // from GET /api/memories
+let displayedMemories = []; // currently shown in list
+let selectedMemory = null;  // memory shown in right panel
+let isRecallMode = false;   // true when showing recall results
+
+// ============================================================
+// UTILITIES
+// ============================================================
+
+function escapeHtml(str) {
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function setStatus(text, type) {
+  const badge = document.getElementById('statusBadge');
+  badge.textContent = text;
+  badge.className = 'state-badge state-' + type;
+  badge.style.display = 'inline-block';
+  // Auto-hide success messages after 6s
+  clearTimeout(badge._timer);
+  if (type === 'converged') {
+    badge._timer = setTimeout(() => { badge.style.display = 'none'; }, 6000);
+  }
+}
+
+function setDot(state) {
+  const dot = document.getElementById('statusDot');
+  dot.className = 'status-dot' + (state ? ' ' + state : '');
+}
+
+function stateClass(state) {
+  if (!state) return 'state-idle';
+  const s = state.toLowerCase();
+  if (s === 'converged') return 'state-converged';
+  if (s === 'oscillating') return 'state-oscillating';
+  if (s.includes('chaotic') || s.includes('failed')) return 'state-chaotic';
+  return 'state-idle';
+}
+
+function handleInputKey(e) {
+  // Ctrl+Enter = Store, Shift+Enter = Recall
+  if (e.key === 'Enter' && e.ctrlKey) { e.preventDefault(); storeMemory(); }
+  if (e.key === 'Enter' && e.shiftKey) { e.preventDefault(); searchMemory(); }
+}
+
+// ============================================================
+// MEMORY LIST
+// ============================================================
+
+async function loadMemories() {
+  setDot('busy');
+  try {
+    const resp = await fetch('/api/memories');
+    allMemories = await resp.json();
+    displayedMemories = allMemories;
+    isRecallMode = false;
+    renderMemoryList();
+    setDot('');
+  } catch (e) {
+    setDot('error');
+    console.error('loadMemories failed', e);
+  }
+}
+
+function renderMemoryList() {
+  const list = document.getElementById('memoryList');
+  const countEl = document.getElementById('memoryCount');
+
+  const n = displayedMemories.length;
+  countEl.textContent = isRecallMode
+    ? `${n} result${n !== 1 ? 's' : ''}`
+    : `${n} memor${n !== 1 ? 'ies' : 'y'}`;
+
+  if (n === 0) {
+    list.innerHTML = '<div class="empty-msg">No memories found.</div>';
+    return;
+  }
+
+  // In browse mode sort HOT→WARM→COLD; recall is already sorted by similarity
+  const sorted = isRecallMode
+    ? [...displayedMemories]
+    : [...displayedMemories].sort((a, b) => {
+        const order = { HOT: 0, WARM: 1, COLD: 2 };
+        return (order[a.tier] ?? 2) - (order[b.tier] ?? 2);
+      });
+
+  list.innerHTML = sorted.map(m => {
+    const tierClass = m.tier === 'HOT' ? 'tier-hot' : m.tier === 'WARM' ? 'tier-warm' : 'tier-cold';
+    const simBadge = isRecallMode && m.similarity != null
+      ? `<span class="sim-badge">${(Math.abs(m.similarity) * 100).toFixed(0)}%</span>`
+      : '';
+    const shortText = m.text.length > 54 ? m.text.slice(0, 54) + '…' : m.text;
+    const sel = selectedMemory && selectedMemory.key === m.key ? ' selected' : '';
+    // Keys are hex strings (safe), chunk names are alphanumeric+underscore (safe)
+    return `<div class="memory-item${sel}"
+      onclick="selectMemory('${m.key}','${m.chunk}')"
+      title="${escapeHtml(m.text)}">
+      <span class="tier-badge ${tierClass}">${m.tier}</span>
+      ${simBadge}
+      <span class="memory-text">${escapeHtml(shortText)}</span>
+    </div>`;
+  }).join('');
+}
+
+// ============================================================
+// STORE
+// ============================================================
+
+async function storeMemory() {
+  const text = document.getElementById('inputText').value.trim();
+  if (!text) return;
+
+  setStatus('Storing…', 'evolving');
+  setDot('busy');
+  try {
+    const resp = await fetch('/api/store', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text }),
+    });
+    const data = await resp.json();
+    if (data.error) throw new Error(data.error);
+    setStatus(`${data.state} · ${data.chunk} · ${data.ticks} ticks`,
+      data.stored ? 'converged' : 'chaotic');
+    setDot('');
+    isRecallMode = false;
+    await loadMemories();
+  } catch (e) {
+    setStatus('Store failed: ' + e.message, 'chaotic');
+    setDot('error');
+  }
+}
+
+// ============================================================
+// RECALL
+// ============================================================
+
+async function searchMemory() {
+  const text = document.getElementById('inputText').value.trim();
+  if (!text) return;
+
+  setStatus('Searching…', 'evolving');
+  setDot('busy');
+  try {
+    const resp = await fetch('/api/recall', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text, top_k: 10 }),
+    });
+    const results = await resp.json();
+    if (results.error) throw new Error(results.error);
+    displayedMemories = results;
+    isRecallMode = true;
+    renderMemoryList();
+    setStatus(`${results.length} match${results.length !== 1 ? 'es' : ''} found`, 'converged');
+    setDot('');
+  } catch (e) {
+    setStatus('Recall failed: ' + e.message, 'chaotic');
+    setDot('error');
+  }
+}
+
+// ============================================================
+// SELECT MEMORY → RIGHT PANEL
+// ============================================================
+
+async function selectMemory(key, chunk) {
+  const mem = displayedMemories.find(m => m.key === key);
+  if (!mem) return;
+
+  selectedMemory = mem;
+  renderMemoryList(); // update selection highlight
+
+  // Fill detail panel
+  document.getElementById('emptyState').style.display = 'none';
+  document.getElementById('detailView').style.display = 'block';
+
+  document.getElementById('detailText').textContent = mem.text;
+  document.getElementById('detailTemp').textContent = (mem.temperature || 0).toFixed(3);
+  document.getElementById('detailTicks').textContent = mem.ticks ?? '—';
+
+  const stEl = document.getElementById('detailState');
+  stEl.textContent = mem.state || '—';
+  stEl.className = 'state-badge ' + stateClass(mem.state);
+
+  const tierEl = document.getElementById('detailTier');
+  tierEl.textContent = mem.tier || 'COLD';
+  tierEl.className = 'tier-badge tier-' + (mem.tier || 'COLD').toLowerCase();
+
+  document.getElementById('detailChunk').textContent = mem.chunk || 'general';
+
+  await renderAttractor(key, chunk, mem.text);
+}
+
+// ============================================================
+// RENDER ATTRACTOR
+// ============================================================
+
+async function renderAttractor(key, chunk, text) {
+  const canvas = document.getElementById('attractorCanvas');
+
+  // Try server-side attractor first
+  try {
+    const resp = await fetch(`/api/attractor/${key}?chunk=${encodeURIComponent(chunk)}`);
+    if (resp.ok) {
+      const data = await resp.json();
+      renderFrame(canvas, new Float32Array(data));
+      return;
+    }
+  } catch (_) { /* fall through to client-side */ }
+
+  // Fallback: evolve client-side from text
+  let frame = await textToFrame(text);
+  for (let i = 0; i < 200; i++) {
+    frame = applyCADynamics(frame);
+  }
+  renderFrame(canvas, frame);
+}
+
+// ============================================================
+// FORGET
+// ============================================================
+
+async function forgetSelected() {
+  if (!selectedMemory) return;
+  const preview = selectedMemory.text.length > 60
+    ? selectedMemory.text.slice(0, 60) + '…'
+    : selectedMemory.text;
+  if (!confirm(`Forget this memory?\n\n"${preview}"`)) return;
+
+  setDot('busy');
+  try {
+    const resp = await fetch('/api/forget', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text: selectedMemory.text }),
+    });
+    const data = await resp.json();
+    if (data.forgotten) {
+      selectedMemory = null;
+      document.getElementById('detailView').style.display = 'none';
+      document.getElementById('emptyState').style.display = 'flex';
+      setStatus('Memory forgotten', 'converged');
+      setDot('');
+      await loadMemories();
+    } else {
+      setStatus('Memory not found on disk', 'chaotic');
+      setDot('error');
+    }
+  } catch (e) {
+    setStatus('Forget failed: ' + e.message, 'chaotic');
+    setDot('error');
+  }
+}
+
+// ============================================================
+// SLEEP CONSOLIDATION
+// ============================================================
+
+async function runSleep() {
+  setStatus('Consolidating…', 'evolving');
+  setDot('busy');
+  try {
+    const resp = await fetch('/api/sleep', { method: 'POST' });
+    const data = await resp.json();
+    if (data.error) throw new Error(data.error);
+    setStatus(`Consolidated: ${data.consolidated} · Skipped: ${data.skipped}`, 'converged');
+    setDot('');
+    await loadMemories();
+  } catch (e) {
+    setStatus('Sleep failed: ' + e.message, 'chaotic');
+    setDot('error');
+  }
+}
+
+// ============================================================
+// BOOT
+// ============================================================
+
+window.addEventListener('DOMContentLoaded', loadMemories);
+</script>
+</body>
+</html>

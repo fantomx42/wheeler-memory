@@ -29,6 +29,7 @@ wheeler-info = "scripts.system_info:main"
 wheeler-forget = "scripts.wheeler_forget:main"
 wheeler-sleep = "scripts.wheeler_sleep:main"
 wheeler-agent = "scripts.wheeler_agent:main"
+wheeler = "scripts.wheeler_ui:main"
 
 [tool.setuptools.packages.find]
 include = ["wheeler_memory*", "scripts*"]
