@@ -417,6 +417,31 @@ pip install -e ".[embed]"
 
 ---
 
+## User Interfaces
+
+Wheeler Memory provides both CLI and web-based interfaces:
+
+### Web Dashboard
+```bash
+wheeler-ui
+```
+Launches a local HTTP server on `http://localhost:7437` with an interactive dashboard for storing, recalling, and managing memories. See `ui/README.md` for details.
+
+### CLI Tools
+See [CLI Usage](#cli-usage) above for the full command reference.
+
+### Interactive Demo
+A standalone educational demo is available at `ui/demo.html` showcasing core concepts and visualizations.
+
+---
+
+## Related Tools
+
+- **OpenWebUI Integration** (`open_webui_setup/`): Integration layer for Wheeler Memory with OpenWebUI, enabling LLM-based conversational recall.
+- **3D Viewer** (`wheeler_3d_viewer/`): Separate visualization tool for exploring attractor landscapes in 3D. See `wheeler_3d_viewer/README.md` for setup.
+
+---
+
 ## Future Work
 
 ### Completed

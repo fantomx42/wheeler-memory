@@ -17,7 +17,7 @@ from wheeler_memory.hashing import text_to_hex
 import numpy as np
 
 PORT = 7437
-UI_FILE = Path(__file__).parent.parent / "ui" / "index.html"
+UI_FILE = Path(__file__).parent.parent / "ui" / "dashboard.html"
 
 SEED_MEMORIES = [
     "cellular automata evolve through local neighbor rules toward stable attractors",
@@ -197,7 +197,7 @@ class WheelerHandler(BaseHTTPRequestHandler):
 
 def main():
     if not UI_FILE.exists():
-        print(f"ERROR: ui/index.html not found at {UI_FILE}", file=sys.stderr)
+        print(f"ERROR: ui/dashboard.html not found at {UI_FILE}", file=sys.stderr)
         sys.exit(1)
 
     _seed_if_empty(DEFAULT_DATA_DIR)
