@@ -33,5 +33,11 @@ wheeler-ui = "scripts.wheeler_ui:main"
 Homepage = "https://github.com/fantomx42/wheeler-memory"
 Repository = "https://github.com/fantomx42/wheeler-memory"
 
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+]
+
 [tool.setuptools.packages.find]
 include = ["wheeler_memory*", "scripts*"]
