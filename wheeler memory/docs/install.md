@@ -121,10 +121,13 @@ If `Device` shows `cpu` but you have a GPU, follow the steps in
 |---|---|
 | `wheeler-store` | Encode and store a memory |
 | `wheeler-recall` | Search for stored memories |
+| `wheeler-forget` | Delete a stored memory |
+| `wheeler-sleep` | Run sleep consolidation |
+| `wheeler-agent` | Start the LLM agent loop |
+| `wheeler-temps` | List memories with temperature tiers |
 | `wheeler-info` | Print hardware and device summary |
 | `wheeler-bench-gpu` | Run GPU vs CPU benchmark |
-| `wheeler-temps` | List memories with temperature tiers |
 | `wheeler-scrub` | Inspect a brick evolution timeline |
-| `wheeler-diversity` | Test attractor diversity across inputs |
+| `wheeler-ui` | Launch the web dashboard |
 
 See [CLI Reference](cli.md) for full flag documentation.
