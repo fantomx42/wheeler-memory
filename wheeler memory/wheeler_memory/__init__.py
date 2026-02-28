@@ -80,6 +80,9 @@ except ImportError:
 # Reconstructive recall
 from .reconstruction import reconstruct, reconstruct_batch
 
+# LLM agent (optional — requires Ollama running locally)
+from .agent import WheelerAgent
+
 __all__ = [
     "hash_to_frame",
     "text_to_hex",
@@ -145,5 +148,7 @@ __all__ = [
     "compute_attention_budget",
     "salience_from_label",
     "salience_from_temperature",
+    # LLM agent
+    "WheelerAgent",
 ]
 
