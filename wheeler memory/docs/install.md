@@ -12,11 +12,29 @@ Clone the repository and install in editable mode:
 ```bash
 git clone https://github.com/fantomx42/wheeler-memory.git
 cd wheeler-memory
-python -m venv .venv && source .venv/bin/activate
+python -m venv .venv
+```
+
+Activate the virtual environment:
+
+```bash
+# Linux / macOS:
+source .venv/bin/activate
+
+# Windows (PowerShell):
+.venv\Scripts\Activate.ps1
+
+# Windows (cmd):
+.venv\Scripts\activate.bat
+```
+
+```bash
 pip install -e .
 ```
 
 Core dependencies (`numpy`, `scipy`, `matplotlib`, `psutil`) are installed automatically.
+
+> **You do NOT need a GPU.** Wheeler Memory runs entirely on CPU by default. GPU acceleration is optional and only affects CA evolution speed.
 
 ## Optional: Semantic Embedding
 
@@ -30,7 +48,9 @@ This pulls in `sentence-transformers>=3.0` and its transitive dependencies
 (`torch`, `transformers`, etc.). The model (`all-MiniLM-L6-v2`) is downloaded
 from HuggingFace on first use and cached locally.
 
-Without this extra, `--embed` flags raise an `ImportError` at runtime.
+Without this extra, `--embed` flags print a friendly error with install instructions.
+
+> **macOS (Apple Silicon):** `sentence-transformers` uses the `mps` device automatically on M1/M2/M3. No extra setup needed.
 
 ## Optional: GPU Acceleration
 
@@ -131,3 +151,27 @@ If `Device` shows `cpu` but you have a GPU, follow the steps in
 | `wheeler-ui` | Launch the web dashboard |
 
 See [CLI Reference](cli.md) for full flag documentation.
+
+## Optional: LLM Agent (wheeler-agent)
+
+The `wheeler-agent` command starts an interactive AI chat loop that uses Wheeler Memory for context. It requires [Ollama](https://ollama.ai) running locally.
+
+### Install Ollama
+
+```bash
+# Linux
+curl -fsSL https://ollama.ai/install.sh | sh
+
+# macOS
+brew install ollama
+
+# Windows — download from https://ollama.ai/download
+```
+
+### Pull a model and start the agent
+
+```bash
+ollama serve          # start Ollama (may already run as a service)
+ollama pull qwen3     # download the default model (~2 GB)
+wheeler-agent         # start the memory agent loop
+```

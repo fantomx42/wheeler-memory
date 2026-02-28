@@ -8,6 +8,7 @@ Usage:
 """
 
 import argparse
+import sys
 
 from wheeler_memory import list_memories
 
@@ -23,7 +24,14 @@ def main():
     )
     args = parser.parse_args()
 
-    memories = list_memories(data_dir=args.data_dir, chunk=args.chunk)
+    try:
+        memories = list_memories(data_dir=args.data_dir, chunk=args.chunk)
+    except FileNotFoundError:
+        print('No memories found. Store something first with: wheeler-store "your text"')
+        return
+    except Exception as e:
+        print(f"Error: {e}", file=sys.stderr)
+        sys.exit(1)
 
     if args.tier:
         memories = [m for m in memories if m["temperature_tier"] == args.tier]

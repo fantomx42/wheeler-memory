@@ -220,3 +220,121 @@ The launch script mounts two paths into the Open WebUI Pipelines container:
 | `max_context_length` | 2000 | Soft cap on injected context characters |
 
 Source: `open_webui_setup/pipelines/wheeler_memory_pipeline.py`.
+
+---
+
+## 6. CA Dynamics Engine
+
+### Grid
+
+Every memory starts as a **64×64 grid of float32 values in [-1.0, 1.0]** — 4,096 cells.
+
+### Seeding
+
+```python
+# SHA-256 of input text → seed PCG64 RNG → uniform(-1.0, 1.0) grid
+frame = hash_to_frame("input text")  # 64×64 float32
+```
+
+SHA-256 is used (not Python's `hash()`), so the same input always produces the same frame across sessions and restarts.
+
+### Update Rule
+
+Each tick uses a **Von Neumann 4-neighborhood** (up/down/left/right, wrapping) with a **continuous gradient rule**:
+
+```
+Local max  (cell ≥ all 4 neighbors): delta = (1 - cell) × 0.35   → push toward +1
+Local min  (cell ≤ all 4 neighbors): delta = (-1 - cell) × 0.35  → push toward -1
+Slope      (neither):                delta = (max_neighbor - cell) × 0.20  → flow uphill
+```
+
+The result is clipped to [-1, 1]. Local peaks push toward +1, valleys toward -1, and slopes flow uphill — producing smooth convergence toward polarized patterns.
+
+### Convergence
+
+Evolution stops when one of three conditions is met:
+
+| State | Condition |
+|---|---|
+| `CONVERGED` | `mean(|delta|) < 1e-4` — grid has stabilized |
+| `OSCILLATING` | Role-space periodicity detected (period 2–10, ≥1% cells affected) |
+| `CHAOTIC` | Neither condition met within `max_iters` |
+
+```python
+result = evolve_and_interpret(frame)
+# result["state"]             → "CONVERGED" | "OSCILLATING" | "CHAOTIC"
+# result["attractor"]         → 64×64 final frame
+# result["convergence_ticks"] → how many iterations it took
+# result["history"]           → list of frames (for MemoryBrick)
+```
+
+### Oscillation Detection
+
+Role-space periodicity analysis detects when cells cycle between roles (local max / slope / local min) with period p (2–10). Requires ≥1% of cells to be oscillating.
+
+```python
+osc = detect_oscillation(history)
+# osc["oscillating"]       → True/False
+# osc["period"]            → cycle period (or None)
+# osc["oscillating_cells"] → count of cycling cells
+```
+
+### GPU Backend (HIP/ROCm)
+
+`gpu_dynamics.py` provides a Python interface to a compiled HIP kernel (`libwheeler_ca.so`). The kernel supports single-frame and batch evolution. `evolve_and_interpret()` automatically uses the GPU when the library is detected, falling back to CPU otherwise.
+
+```bash
+cd wheeler_memory/gpu && make
+```
+
+See [GPU Acceleration](gpu.md) for benchmark numbers and setup.
+
+---
+
+## 7. System Flow
+
+```
+store("input text")
+  │
+  ├─ select_chunk(text)               keyword routing → domain chunk
+  ├─ hash_to_frame(text)              SHA-256 → PCG64 → 64×64 uniform(-1,1)
+  │    └── OR embed_to_frame(text)    SentenceTransformer → projection → tanh
+  ├─ store_with_rotation_retry()      try 0/90/180/270° until CONVERGED
+  │    └─ evolve_and_interpret()      CA iterations → CONVERGED/OSCILLATING/CHAOTIC
+  ├─ MemoryBrick.from_evolution_result()  capture full history
+  └─ store_memory()                   save .npy, .npz, update index.json
+
+recall("query text")
+  │
+  ├─ select_recall_chunks(query)      keyword routing → chunks to search
+  ├─ hash_to_frame(query)             or embed_to_frame(query) with --embed
+  ├─ evolve_and_interpret(query_frame)   evolve query to attractor
+  ├─ for each stored attractor:
+  │    pearsonr(query_flat, stored_flat)   → similarity
+  │    compute_temperature(hits, last_accessed)  → temperature
+  │    effective = similarity + boost * temperature
+  ├─ sort by effective, take top_k
+  ├─ [optional] reconstruct each result   blend + re-evolve
+  └─ bump_access() on recalled memories   update hit_count, last_accessed
+```
+
+### Module Structure
+
+```
+wheeler_memory/
+├── attention.py       Attention model: salience → CA budget (variable tick rates)
+├── dynamics.py        CA engine: apply_ca_dynamics(), evolve_and_interpret() (GPU-dispatched)
+├── hashing.py         SHA-256 text-to-frame seeding
+├── temperature.py     Wall-clock temperature computation and tier classification
+├── storage.py         Attractor storage (disk) and Pearson recall
+├── reconstruction.py  Blend + re-evolve reconstructive recall
+├── brick.py           MemoryBrick: temporal evolution history
+├── chunking.py        Domain routing (code/hardware/daily_tasks/science/meta/general)
+├── embedding.py       SentenceTransformer → random projection → 64×64 frame
+├── rotation.py        Rotation retry for non-converging seeds
+├── oscillation.py     Role-space periodicity detection
+├── hardware.py        CPU/GPU/NPU detection, device selection
+├── gpu_dynamics.py    HIP kernel interface (requires compiled libwheeler_ca.so)
+├── polarity.py        Dual-polarity encoding: polar = −experience (r = −1.0), polar decay
+└── gpu/               HIP kernel source and compiled libwheeler_ca.so
+```

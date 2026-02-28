@@ -32,7 +32,16 @@ def main():
     args = parser.parse_args()
 
     data_dir = args.data_dir or DEFAULT_DATA_DIR
+    try:
+        _run(args, data_dir)
+    except KeyboardInterrupt:
+        sys.exit(0)
+    except Exception as e:
+        print(f"Error: {e}", file=sys.stderr)
+        sys.exit(1)
 
+
+def _run(args, data_dir):
     # --- Targeted forget by text ---
     if args.text is not None:
         found = forget_by_text(args.text, data_dir)

@@ -459,6 +459,67 @@ textarea.text-input {
   max-height: 160px;
   line-height: 1.5;
 }
+
+/* Help modal */
+.help-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.7);
+  z-index: 1000;
+  align-items: center;
+  justify-content: center;
+  backdrop-filter: blur(4px);
+}
+.help-card {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-glow);
+  border-radius: var(--radius-lg);
+  padding: 32px 36px;
+  max-width: 560px;
+  width: 90%;
+  max-height: 80vh;
+  overflow-y: auto;
+  position: relative;
+  box-shadow: var(--shadow-glow);
+}
+.help-card h2 {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--accent-violet);
+  margin-bottom: 20px;
+  letter-spacing: 0.03em;
+}
+.help-card dl { display: grid; gap: 14px; }
+.help-card dt {
+  font-weight: 600;
+  color: var(--text-primary);
+  font-size: 0.85rem;
+  margin-bottom: 2px;
+}
+.help-card dd {
+  color: var(--text-secondary);
+  font-size: 0.82rem;
+  line-height: 1.55;
+  margin: 0;
+}
+.help-card .help-divider {
+  border: none;
+  border-top: 1px solid var(--border-subtle);
+  margin: 18px 0;
+}
+.help-close {
+  position: absolute;
+  top: 14px;
+  right: 18px;
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 1.3rem;
+  cursor: pointer;
+  line-height: 1;
+}
+.help-close:hover { color: var(--text-primary); }
 </style>
 </head>
 <body>
@@ -467,6 +528,7 @@ textarea.text-input {
 <header class="app-header">
   <span class="app-title">Wheeler Memory</span>
   <div class="header-actions">
+    <button class="btn btn-secondary btn-xs" onclick="toggleHelp()" title="Help — what do these things mean?">?</button>
     <button class="btn btn-secondary btn-xs" onclick="runSleep()">Sleep</button>
     <span id="statusDot" class="status-dot" title="Ready"></span>
   </div>
@@ -512,17 +574,17 @@ textarea.text-input {
       <div class="detail-meta">
         <div class="stat-box">
           <div class="stat-value" id="detailTemp">—</div>
-          <div class="stat-label">Temperature</div>
+          <div class="stat-label" title="How 'fresh' this memory is. Starts at 0.3, rises with repeated access, halves every 7 days without use.">Temperature</div>
         </div>
         <div class="stat-box">
           <div class="stat-value" id="detailTicks">—</div>
-          <div class="stat-label">Ticks</div>
+          <div class="stat-label" title="How many cellular automata steps it took for this memory's pattern to stabilize. Typically 40–100.">Ticks</div>
         </div>
         <div class="stat-box">
           <div style="display:flex;justify-content:center;align-items:center;min-height:1.4rem;">
             <span id="detailState" class="state-badge state-idle">—</span>
           </div>
-          <div class="stat-label" style="margin-top:6px;">State</div>
+          <div class="stat-label" style="margin-top:6px;" title="CONVERGED = stable pattern (good). OSCILLATING = pattern cycles (uncertain). CHAOTIC = never settled (rare).">State</div>
         </div>
       </div>
       <div class="detail-chunk-row">
@@ -958,6 +1020,77 @@ async function runSleep() {
 // ============================================================
 
 window.addEventListener('DOMContentLoaded', loadMemories);
+
+// ============================================================
+// HELP MODAL
+// ============================================================
+
+function toggleHelp() {
+  const overlay = document.getElementById('helpOverlay');
+  const visible = overlay.style.display === 'flex';
+  overlay.style.display = visible ? 'none' : 'flex';
+}
+
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') {
+    document.getElementById('helpOverlay').style.display = 'none';
+  }
+});
 </script>
+
+<!-- Help overlay -->
+<div id="helpOverlay" class="help-overlay" onclick="if(event.target===this)toggleHelp()">
+  <div class="help-card">
+    <button class="help-close" onclick="toggleHelp()" title="Close">✕</button>
+    <h2>Wheeler Memory — Quick Guide</h2>
+    <dl>
+      <div>
+        <dt>Store (Ctrl+Enter)</dt>
+        <dd>Saves your text as a memory. The system runs it through a cellular automaton — a self-organising grid — until a stable pattern forms. That pattern is the memory's unique fingerprint.</dd>
+      </div>
+      <div>
+        <dt>Recall (Shift+Enter)</dt>
+        <dd>Finds stored memories similar to your query by comparing their fingerprints using Pearson correlation. Higher similarity = closer match.</dd>
+      </div>
+      <hr class="help-divider">
+      <div>
+        <dt>The colourful square</dt>
+        <dd>The <strong>attractor</strong> — the stable pattern the cellular automaton converged to. Think of it as the memory's visual fingerprint. Each input produces a unique one.</dd>
+      </div>
+      <div>
+        <dt>Temperature &amp; Tier</dt>
+        <dd>
+          How "fresh" this memory is. Starts at 0.3 when first stored, rises with repeated access, and halves every 7 days without use.<br>
+          <strong style="color:#ef4444">HOT ≥ 0.6</strong> — recent or frequently accessed.<br>
+          <strong style="color:#f59e0b">WARM ≥ 0.3</strong> — moderately accessed.<br>
+          <strong style="color:#06d6a0">COLD &lt; 0.3</strong> — stale, candidate for archival.
+        </dd>
+      </div>
+      <div>
+        <dt>State</dt>
+        <dd>
+          How the memory's pattern formed:<br>
+          <strong>CONVERGED</strong> — settled into a stable pattern (good).<br>
+          <strong>OSCILLATING</strong> — pattern kept cycling (uncertain).<br>
+          <strong>CHAOTIC</strong> — never settled (rare, try rephrasing).
+        </dd>
+      </div>
+      <div>
+        <dt>Ticks</dt>
+        <dd>How many steps the cellular automaton took to form this pattern. Typically 40–100 ticks (~3 ms on CPU).</dd>
+      </div>
+      <hr class="help-divider">
+      <div>
+        <dt>Sleep</dt>
+        <dd>Compresses old memories by removing redundant intermediate frames, saving disk space. The first frame (seed) and last frame (attractor) are always kept. Hot memories are skipped.</dd>
+      </div>
+      <div>
+        <dt>Forget</dt>
+        <dd>Permanently deletes the selected memory — attractor, formation history, and index entry.</dd>
+      </div>
+    </dl>
+  </div>
+</div>
+
 </body>
 </html>

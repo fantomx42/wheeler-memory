@@ -77,61 +77,77 @@ def main():
     chunk = args.chunk if args.chunk else select_chunk(text)
     sal = salience_from_label(args.salience) if args.salience else None
 
-    if args.dual:
-        from wheeler_memory.polarity import store_dual
-        dual_result = store_dual(
-            text, data_dir=args.data_dir, chunk=chunk,
-            use_embedding=args.embed, salience=sal,
-        )
-        exp = dual_result["experience"]
-        state = exp["state"]
-        ticks = exp["convergence_ticks"]
-        angle = exp["metadata"].get("rotation_used", 0)
-        attempts = exp["metadata"].get("attempts", 1)
-        wall = exp["metadata"].get("wall_time_seconds", 0)
-        salience_label = exp["metadata"].get("attention_label", "medium")
+    try:
+        if args.dual:
+            from wheeler_memory.polarity import store_dual
+            dual_result = store_dual(
+                text, data_dir=args.data_dir, chunk=chunk,
+                use_embedding=args.embed, salience=sal,
+            )
+            exp = dual_result["experience"]
+            state = exp["state"]
+            ticks = exp["convergence_ticks"]
+            angle = exp["metadata"].get("rotation_used", 0)
+            attempts = exp["metadata"].get("attempts", 1)
+            wall = exp["metadata"].get("wall_time_seconds", 0)
+            salience_label = exp["metadata"].get("attention_label", "medium")
+            chunk_label = f"{chunk} (auto)" if auto else chunk
+            print(f"Chunk:          {chunk_label}")
+            print(f"State:          {state} (experience)")
+            print(f"Polar attractor: {dual_result['polar_state']}")
+            print(f"Ticks:          {ticks}")
+            print(f"Rotation:       {angle}° (attempt {attempts})")
+            print(f"Salience:       {salience_label}")
+            print(f"Time:           {wall:.3f}s")
+            print(f"Experience key: {dual_result['experience_hex']}")
+            print(f"Polar key:      {dual_result['polar_hex']}")
+            if state == "CONVERGED":
+                print("Dual-polarity memory stored successfully (experience + polar attractors).")
+            elif state == "FAILED_ALL_ROTATIONS":
+                print("Warning: experience attractor failed to converge on all rotations.", file=sys.stderr)
+            return
+
+        if args.embed:
+            result = _embed_store(text, chunk, args.data_dir, salience=sal)
+        else:
+            result = store_with_rotation_retry(
+                text, data_dir=args.data_dir, chunk=chunk, salience=sal,
+            )
+
+        state = result["state"]
+        ticks = result["convergence_ticks"]
+        angle = result["metadata"].get("rotation_used", 0)
+        attempts = result["metadata"].get("attempts", 1)
+        wall = result["metadata"].get("wall_time_seconds", 0)
+
+        salience_label = result["metadata"].get("attention_label", "medium")
         chunk_label = f"{chunk} (auto)" if auto else chunk
-        print(f"Chunk:          {chunk_label}")
-        print(f"State:          {state} (experience)")
-        print(f"Polar attractor: {dual_result['polar_state']}")
-        print(f"Ticks:          {ticks}")
-        print(f"Rotation:       {angle}° (attempt {attempts})")
-        print(f"Salience:       {salience_label}")
-        print(f"Time:           {wall:.3f}s")
-        print(f"Experience key: {dual_result['experience_hex']}")
-        print(f"Polar key:      {dual_result['polar_hex']}")
+        print(f"Chunk:    {chunk_label}")
+        print(f"State:    {state}")
+        print(f"Ticks:    {ticks}")
+        print(f"Rotation: {angle}° (attempt {attempts})")
+        print(f"Salience: {salience_label}")
+        print(f"Time:     {wall:.3f}s")
+
         if state == "CONVERGED":
-            print("Dual-polarity memory stored successfully (experience + polar attractors).")
+            print("Memory stored successfully.")
         elif state == "FAILED_ALL_ROTATIONS":
-            print("Warning: experience attractor failed to converge on all rotations.", file=sys.stderr)
-        return
-
-    if args.embed:
-        result = _embed_store(text, chunk, args.data_dir, salience=sal)
-    else:
-        result = store_with_rotation_retry(
-            text, data_dir=args.data_dir, chunk=chunk, salience=sal,
-        )
-
-    state = result["state"]
-    ticks = result["convergence_ticks"]
-    angle = result["metadata"].get("rotation_used", 0)
-    attempts = result["metadata"].get("attempts", 1)
-    wall = result["metadata"].get("wall_time_seconds", 0)
-
-    salience_label = result["metadata"].get("attention_label", "medium")
-    chunk_label = f"{chunk} (auto)" if auto else chunk
-    print(f"Chunk:    {chunk_label}")
-    print(f"State:    {state}")
-    print(f"Ticks:    {ticks}")
-    print(f"Rotation: {angle}° (attempt {attempts})")
-    print(f"Salience: {salience_label}")
-    print(f"Time:     {wall:.3f}s")
-
-    if state == "CONVERGED":
-        print("Memory stored successfully.")
-    elif state == "FAILED_ALL_ROTATIONS":
-        print("Warning: failed to converge on all rotations.", file=sys.stderr)
+            print("Warning: failed to converge on all rotations.", file=sys.stderr)
+    except ImportError as e:
+        if "sentence_transformers" in str(e):
+            print(
+                "Error: Embedding requires sentence-transformers.\n"
+                "Install with: pip install -e '.[embed]'",
+                file=sys.stderr,
+            )
+        else:
+            print(f"Error: Missing dependency — {e}", file=sys.stderr)
+        sys.exit(1)
+    except KeyboardInterrupt:
+        sys.exit(0)
+    except Exception as e:
+        print(f"Error: {e}", file=sys.stderr)
+        sys.exit(1)
 
 
 if __name__ == "__main__":

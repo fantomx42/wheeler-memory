@@ -7,6 +7,7 @@ Usage:
 """
 
 import argparse
+import sys
 
 from wheeler_memory import recall_memory
 from wheeler_memory.attention import salience_from_label
@@ -56,18 +57,34 @@ def main():
     args = parser.parse_args()
 
     sal = salience_from_label(args.salience) if args.salience else None
-    results = recall_memory(
-        args.query,
-        top_k=args.top_k,
-        data_dir=args.data_dir,
-        chunk=args.chunk,
-        temperature_boost=args.temperature_boost,
-        use_embedding=args.embed,
-        reconstruct=args.reconstruct,
-        reconstruct_alpha=args.alpha,
-        salience=sal,
-        polar_decay=args.polar_decay,
-    )
+    try:
+        results = recall_memory(
+            args.query,
+            top_k=args.top_k,
+            data_dir=args.data_dir,
+            chunk=args.chunk,
+            temperature_boost=args.temperature_boost,
+            use_embedding=args.embed,
+            reconstruct=args.reconstruct,
+            reconstruct_alpha=args.alpha,
+            salience=sal,
+            polar_decay=args.polar_decay,
+        )
+    except ImportError as e:
+        if "sentence_transformers" in str(e):
+            print(
+                "Error: Embedding requires sentence-transformers.\n"
+                "Install with: pip install -e '.[embed]'",
+                file=sys.stderr,
+            )
+        else:
+            print(f"Error: Missing dependency — {e}", file=sys.stderr)
+        sys.exit(1)
+    except KeyboardInterrupt:
+        sys.exit(0)
+    except Exception as e:
+        print(f"Error: {e}", file=sys.stderr)
+        sys.exit(1)
 
     if not results:
         print("No memories stored yet.")
