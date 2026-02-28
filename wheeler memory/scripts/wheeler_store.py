@@ -62,8 +62,8 @@ def main():
         help="Attention level: low (fast/loose), medium (default), high (deep/tight)",
     )
     parser.add_argument(
-        "--trauma", action="store_true",
-        help="Store as a traumatic memory (creates experience + avoidance attractors linked by avoidance_link edge)",
+        "--dual", action="store_true",
+        help="Store as a dual-polarity memory (creates experience + polar attractors linked by polarity_link edge)",
     )
     args = parser.parse_args()
 
@@ -77,13 +77,13 @@ def main():
     chunk = args.chunk if args.chunk else select_chunk(text)
     sal = salience_from_label(args.salience) if args.salience else None
 
-    if args.trauma:
-        from wheeler_memory.trauma import store_trauma
-        trauma_result = store_trauma(
+    if args.dual:
+        from wheeler_memory.polarity import store_dual
+        dual_result = store_dual(
             text, data_dir=args.data_dir, chunk=chunk,
             use_embedding=args.embed, salience=sal,
         )
-        exp = trauma_result["experience"]
+        exp = dual_result["experience"]
         state = exp["state"]
         ticks = exp["convergence_ticks"]
         angle = exp["metadata"].get("rotation_used", 0)
@@ -93,15 +93,15 @@ def main():
         chunk_label = f"{chunk} (auto)" if auto else chunk
         print(f"Chunk:          {chunk_label}")
         print(f"State:          {state} (experience)")
-        print(f"Avoidance:      {trauma_result['avoidance_state']}")
+        print(f"Polar attractor: {dual_result['polar_state']}")
         print(f"Ticks:          {ticks}")
         print(f"Rotation:       {angle}° (attempt {attempts})")
         print(f"Salience:       {salience_label}")
         print(f"Time:           {wall:.3f}s")
-        print(f"Experience key: {trauma_result['experience_hex']}")
-        print(f"Avoidance key:  {trauma_result['avoidance_hex']}")
+        print(f"Experience key: {dual_result['experience_hex']}")
+        print(f"Polar key:      {dual_result['polar_hex']}")
         if state == "CONVERGED":
-            print("Trauma stored successfully (experience + avoidance attractors).")
+            print("Dual-polarity memory stored successfully (experience + polar attractors).")
         elif state == "FAILED_ALL_ROTATIONS":
             print("Warning: experience attractor failed to converge on all rotations.", file=sys.stderr)
         return

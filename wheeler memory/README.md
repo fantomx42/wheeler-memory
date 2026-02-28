@@ -62,8 +62,8 @@ Wheeler Memory is a functional associative memory system. The implemented compon
 | Sleep consolidation | `consolidation.py` | ✅ Implemented |
 | Attention model (variable ticks) | `attention.py` | ✅ Implemented |
 | LLM integration (Ollama/qwen3 agent) | `agent.py` | ✅ Implemented |
-| Dual-attractor encoding (opposite polarity) | `trauma.py` | ✅ Implemented |
-| Exposure therapy (safe-context) | `trauma.py` | ✅ Implemented |
+| Dual-polarity encoding (opposite polarity) | `polarity.py` | ✅ Implemented |
+| Polar decay (neutralization) | `polarity.py` | ✅ Implemented |
 | Web UI (local browser dashboard) | `wheeler_ui.py` | ✅ Implemented |
 
 ---
@@ -301,14 +301,14 @@ wheeler-recall --embed "machine learning frameworks"
 wheeler-recall --reconstruct "machine learning frameworks"
 wheeler-recall --reconstruct --alpha 0.5 "machine learning frameworks"
 
-# Store a traumatic memory (experience + avoidance attractors)
-wheeler-store --trauma "I got burned by the stove"
+# Store a dual-polarity memory (experience + polar attractors)
+wheeler-store --dual "I got burned by the stove"
 
-# Recall with avoidance companion display
+# Recall with polar companion display
 wheeler-recall "burned stove"
 
-# Exposure therapy: reduce avoidance link weight
-wheeler-recall --safe-context "burned stove"
+# Polar decay: reduce polarity link weight
+wheeler-recall --polar-decay "burned stove"
 
 # List all memories with temperature
 wheeler-temps
@@ -341,7 +341,7 @@ wheeler_memory/
 ├── oscillation.py     Role-space periodicity detection
 ├── hardware.py        CPU/GPU/NPU detection, device selection
 ├── gpu_dynamics.py    HIP kernel interface (requires compiled libwheeler_ca.so)
-├── trauma.py          Dual-attractor encoding: avoidance = −experience (r = −1.0), exposure therapy
+├── polarity.py        Dual-polarity encoding: polar = −experience (r = −1.0), polar decay
 └── gpu/               HIP kernel source and compiled libwheeler_ca.so
 
 scripts/
@@ -368,7 +368,7 @@ scripts/
 │   ├── meta/
 │   └── general/
 ├── rotation_stats.json                per-angle convergence stats
-└── chunks/*/associations.json         association graph; avoidance_link edges include safe_recall_count
+└── chunks/*/associations.json         association graph; polarity_link edges include decay_count
 ```
 
 ### System Flow
@@ -426,7 +426,7 @@ pip install -e ".[embed]"
 - ~~**Sleep consolidation**~~ — prune redundant intermediate frames within bricks ✅
 - ~~**Variable tick rates (attention model)**~~ — salience-driven CA budgets: high-salience inputs get deeper attractor formation ✅
 - ~~**LLM Integration (Phase 4)**~~ — Ollama/qwen3 agent loop: recall → context → LLM → store response ✅
-- ~~**Dual-Attractor Encoding**~~ — experience + avoidance attractors (`avoidance = −experience`, Pearson r = −1.0); `--trauma` flag; exposure therapy via `--safe-context` ✅
+- ~~**Dual-Polarity Encoding**~~ — experience + polar attractors (`polar = −experience`, Pearson r = −1.0); `--dual` flag; polar decay via `--polar-decay` ✅
 - ~~**GPU backend wired into store/recall**~~ — `evolve_and_interpret()` transparently dispatches to GPU when `libwheeler_ca.so` is present (70× speedup on RX 9070 XT) ✅
 
 ### Planned

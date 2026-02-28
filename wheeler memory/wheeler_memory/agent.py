@@ -48,8 +48,8 @@ Guidelines:
 - When asked to forget something, use forget_memory.
 - After a recall, you may store new inferences if they seem worth keeping.
 - Keep your final responses concise and grounded in what the memories show.
-- When a recalled memory has an avoidance companion firing, you can use
-  safe_expose to apply a safe-context recall and reduce the avoidance weight.
+- When a recalled memory has a polar companion firing, you can use
+  polar_decay to apply a polar-decay recall and reduce the polarity link weight.
 """
 
 # ── Tool definitions (OpenAI-compatible format Ollama understands) ────────────
@@ -147,20 +147,20 @@ _TOOLS: list[dict] = [
     {
         "type": "function",
         "function": {
-            "name": "safe_expose",
+            "name": "polar_decay",
             "description": (
-                "Recall with safe context to reduce avoidance link weight "
-                "(exposure therapy). Each call increments safe_recall_count on "
-                "any avoidance link that fires, decaying its weight by 0.7x. "
-                "Use when a recalled memory has an avoidance companion and the "
-                "user wants to work through the association safely."
+                "Recall with polar decay to reduce polarity link weight. "
+                "Each call increments decay_count on any polarity link that "
+                "fires, decaying its weight by 0.7x. Use when a recalled "
+                "memory has a polar companion and the user wants to neutralize "
+                "the association."
             ),
             "parameters": {
                 "type": "object",
                 "properties": {
                     "text": {
                         "type": "string",
-                        "description": "The query text to recall with safe context.",
+                        "description": "The query text to recall with polar decay.",
                     },
                     "top_k": {
                         "type": "integer",
@@ -239,8 +239,8 @@ def _exec_forget_memory(text: str, data_dir: Path | None) -> str:
     return json.dumps({"forgotten": False, "reason": result.reason})
 
 
-def _exec_safe_expose(text: str, top_k: int, data_dir: Path | None) -> str:
-    hits = recall_memory(text, top_k=top_k, data_dir=data_dir, safe_context=True)
+def _exec_polar_decay(text: str, top_k: int, data_dir: Path | None) -> str:
+    hits = recall_memory(text, top_k=top_k, data_dir=data_dir, polar_decay=True)
     if not hits:
         return json.dumps({"results": [], "message": "No memories found."})
     return json.dumps({
@@ -248,7 +248,7 @@ def _exec_safe_expose(text: str, top_k: int, data_dir: Path | None) -> str:
             {
                 "text": h["text"],
                 "similarity": round(h["similarity"], 4),
-                "avoidance_firing": h.get("avoidance_firing"),
+                "polar_firing": h.get("polar_firing"),
             }
             for h in hits
         ]
@@ -277,8 +277,8 @@ def _dispatch_tool(name: str, args: dict, data_dir: Path | None) -> str:
             return _exec_forget_memory(args["text"], data_dir)
         if name == "sleep_consolidate":
             return _exec_sleep_consolidate(data_dir)
-        if name == "safe_expose":
-            return _exec_safe_expose(args["text"], args.get("top_k", 5), data_dir)
+        if name == "polar_decay":
+            return _exec_polar_decay(args["text"], args.get("top_k", 5), data_dir)
         return json.dumps({"error": f"Unknown tool: {name}"})
     except Exception as exc:
         return json.dumps({"error": str(exc)})

@@ -28,6 +28,8 @@ from .temperature import (
     temperature_tier,
 )
 from .warming import (
+    _load_associations,
+    _save_associations,
     build_co_recall_associations,
     build_store_associations,
     load_warmth,
@@ -73,7 +75,7 @@ def store_memory(
     """Save attractor, brick, and index entry for a memory.
 
     Returns the hex hash key used for storage.
-    When memory_type is set (e.g. "avoidance"), it is written into the
+    When memory_type is set (e.g. "polar"), it is written into the
     index entry's metadata so recall can filter or classify the entry.
     """
     d = _get_data_dir(data_dir)
@@ -123,7 +125,7 @@ def recall_memory(
     reconstruct: bool = False,
     reconstruct_alpha: float = 0.3,
     salience: float | None = None,
-    safe_context: bool = False,
+    polar_decay: bool = False,
 ) -> list[dict]:
     """Recall stored memories by Pearson correlation with the query's attractor.
 
@@ -135,12 +137,12 @@ def recall_memory(
     the query attractor and re-evolved through the CA (Darman architecture).
     When salience is set, the query evolution and reconstruction use the
     corresponding attention budget (variable tick rates).
-    When safe_context is True, each avoidance link that fires receives an
-    incremented safe_recall_count (exposure therapy); results include
-    "new_weight" in their avoidance_firing companion dict.
+    When polar_decay is True, each polarity link that fires receives an
+    incremented decay_count; results include "new_weight" in their
+    polar_firing companion dict.
 
-    Avoidance attractors (memory_type=="avoidance") are never surfaced as
-    independent results; they only appear as "avoidance_firing" companions.
+    Polar attractors (memory_type=="polar" or "avoidance") are never surfaced
+    as independent results; they only appear as "polar_firing" companions.
     """
     d = _get_data_dir(data_dir)
     budget = compute_attention_budget(
@@ -181,8 +183,8 @@ def recall_memory(
         warmth_data = load_warmth(chunk_dir)
 
         for hex_key, meta in index.items():
-            # Avoidance attractors are never surfaced as independent results
-            if meta.get("metadata", {}).get("memory_type") == "avoidance":
+            # Polar/avoidance attractors are never surfaced as independent results
+            if meta.get("metadata", {}).get("memory_type") in ("avoidance", "polar"):
                 continue
 
             attractor_path = chunk_dir / "attractors" / f"{hex_key}.npy"
@@ -221,17 +223,27 @@ def recall_memory(
     results.sort(key=lambda r: r["effective_similarity"], reverse=True)
     top_results = results[:top_k]
 
-    # Avoidance companion injection: for each top result, check if an
-    # avoidance link exists. Attach companion; apply safe exposure if requested.
-    from .trauma import apply_safe_exposure, get_avoidance_companion
+    # Polar companion injection: batch by chunk to minimise disk reads.
+    # For top_k results all in the same chunk this reduces 5–10 reads to 1–2.
+    from .polarity import apply_polar_decay_in_place, get_polar_companion_from_assoc
+    by_chunk: dict[str, list] = {}
     for r in top_results:
-        result_chunk_dir = d / "chunks" / r["chunk"]
-        companion = get_avoidance_companion(r["hex_key"], result_chunk_dir)
-        if companion is not None:
-            r["avoidance_firing"] = companion
-            if safe_context:
-                new_weight = apply_safe_exposure(r["hex_key"], result_chunk_dir)
-                r["avoidance_firing"]["new_weight"] = new_weight
+        by_chunk.setdefault(r["chunk"], []).append(r)
+    for chunk_name, chunk_results in by_chunk.items():
+        result_chunk_dir = d / "chunks" / chunk_name
+        assoc = _load_associations(result_chunk_dir)
+        index = _load_index(result_chunk_dir)
+        assoc_dirty = False
+        for r in chunk_results:
+            companion = get_polar_companion_from_assoc(r["hex_key"], assoc, index)
+            if companion is not None:
+                r["polar_firing"] = companion
+                if polar_decay:
+                    new_weight = apply_polar_decay_in_place(r["hex_key"], assoc)
+                    r["polar_firing"]["new_weight"] = new_weight
+                    assoc_dirty = True
+        if assoc_dirty:
+            _save_associations(result_chunk_dir, assoc)
 
     # Reconstructive recall: blend each result with query context
     if reconstruct and top_results:

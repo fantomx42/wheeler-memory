@@ -4,6 +4,8 @@ Implements the 3-state CA dynamics: local max cells push toward +1,
 local min cells push toward -1, slope cells flow toward their max neighbor.
 """
 
+import logging
+
 import numpy as np
 
 from .oscillation import detect_oscillation
@@ -72,8 +74,8 @@ def evolve_and_interpret(
             if not result["history"]:
                 result["history"] = [frame.copy(), result["attractor"].copy()]
             return result
-        except Exception:
-            pass  # fall through to CPU
+        except Exception as e:
+            logging.warning("GPU evolution failed, falling back to CPU: %s", e)
 
     history = [frame.copy()]
 

@@ -210,15 +210,17 @@ def propagate_warmth(chunk_dir: Path, fired_keys: list[str]) -> dict[str, float]
     warmth = assoc.setdefault("warmth", {})
     now_iso = datetime.now(timezone.utc).isoformat()
 
+    from .polarity import EDGE_SOURCE_POLARITY
+    _polar_sources = (EDGE_SOURCE_POLARITY, "avoidance_link")
     fired_set = set(fired_keys)
     warmed: dict[str, float] = {}
 
     for fired in fired_keys:
         visited = {fired}
 
-        # Hop 1 — avoidance_link edges do not spread warmth
+        # Hop 1 — polarity_link edges do not spread warmth
         for n1, edge1 in edges.get(fired, {}).items():
-            if edge1.get("source") == "avoidance_link":
+            if edge1.get("source") in _polar_sources:
                 continue
             if n1 in fired_set:
                 continue
@@ -226,9 +228,9 @@ def propagate_warmth(chunk_dir: Path, fired_keys: list[str]) -> dict[str, float]
                 visited.add(n1)
                 warmed[n1] = warmed.get(n1, 0.0) + WARMTH_HOP1
 
-            # Hop 2 — avoidance_link edges do not spread warmth
+            # Hop 2 — polarity_link edges do not spread warmth
             for n2, edge2 in edges.get(n1, {}).items():
-                if edge2.get("source") == "avoidance_link":
+                if edge2.get("source") in _polar_sources:
                     continue
                 if n2 in visited or n2 in fired_set:
                     continue
