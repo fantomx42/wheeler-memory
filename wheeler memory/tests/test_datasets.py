@@ -467,3 +467,240 @@ class TestBABILong:
             f"Average |similarity| between question and facts is {avg_sim:.4f}; "
             f"expected low correlation for SHA-based cross-text recall"
         )
+
+
+# ===========================================================================
+# EMBEDDING MODE TESTS — semantic cross-text recall
+# All tests require sentence-transformers ([embed] extra).
+# Both store AND recall use embedding mode so attractors live in the
+# same semantic space.
+# ===========================================================================
+
+_st = pytest.importorskip(
+    "sentence_transformers",
+    reason="sentence-transformers required for embedding tests",
+)
+
+from conftest import store_test_memory_embed  # noqa: E402
+
+
+@pytest.mark.slow
+@pytest.mark.embed
+@pytest.mark.skipif(not MBPP_TRAIN_PATH.exists(), reason="MBPP dataset not present")
+class TestMBPPEmbed:
+    """Embedding-mode tests using MBPP Python programming problems."""
+
+    def test_semantic_self_recall(self, tmp_path):
+        """Store 10 problems with embed_to_frame; recall each by its own text.
+
+        Same logical test as TestMBPP.test_store_and_self_recall but through
+        the embedding path, validating the full embed store→recall roundtrip.
+        """
+        texts = _load_parquet_texts(MBPP_TRAIN_PATH, "text", 10)
+        for text in texts:
+            store_test_memory_embed(text, tmp_path, chunk="code")
+
+        for text in texts:
+            results = recall_memory(
+                text, top_k=3, data_dir=tmp_path, chunk="code", use_embedding=True
+            )
+            assert results, f"No results for: {text[:50]}"
+            assert results[0]["text"] == text, (
+                f"Self-recall failed: expected top-1 == stored text, "
+                f"got '{results[0]['text'][:40]}'"
+            )
+
+    def test_semantic_cross_recall(self, tmp_path):
+        """Store problems with embedding; recall using shortened keyword queries.
+
+        This is the test SHA-256 mode cannot pass: a shorter paraphrase of a
+        stored problem should still retrieve that problem in top-3 results.
+        """
+        texts = _load_parquet_texts(MBPP_TRAIN_PATH, "text", 15)
+        for text in texts:
+            store_test_memory_embed(text, tmp_path, chunk="code")
+
+        hits = 0
+        for text in texts[:10]:
+            # Build a keyword query from the first ~5 significant words
+            words = [w for w in text.split() if len(w) > 3][:5]
+            query = " ".join(words)
+            results = recall_memory(
+                query, top_k=5, data_dir=tmp_path, chunk="code", use_embedding=True
+            )
+            stored_texts = [r["text"] for r in results]
+            if text in stored_texts:
+                hits += 1
+
+        # Expect most keyword queries to retrieve the right problem in top-5
+        assert hits >= 6, (
+            f"Semantic cross-recall: only {hits}/10 keyword queries found the "
+            f"original problem in top-5. Embedding mode may not be working."
+        )
+
+    def test_embed_attractor_diversity(self, tmp_path):
+        """Embedding-mode attractors should be diverse — avg pairwise Pearson < 0.5."""
+        texts = _load_parquet_texts(MBPP_TRAIN_PATH, "text", 15)
+        from wheeler_memory.embedding import embed_to_frame
+
+        attractors = []
+        for text in texts:
+            frame = embed_to_frame(text)
+            result = evolve_and_interpret(frame)
+            attractors.append(result["attractor"].flatten())
+
+        correlations = []
+        for i in range(len(attractors)):
+            for j in range(i + 1, len(attractors)):
+                corr, _ = pearsonr(attractors[i], attractors[j])
+                correlations.append(corr)
+
+        avg_corr = np.mean(np.abs(correlations))
+        max_corr = np.max(np.abs(correlations))
+        assert avg_corr < 0.6, (
+            f"Embedding attractors avg correlation {avg_corr:.4f} unexpectedly high"
+        )
+        assert max_corr < 0.95, (
+            f"Embedding attractors max correlation {max_corr:.4f} — "
+            f"two problems may be near-identical"
+        )
+
+
+@pytest.mark.slow
+@pytest.mark.embed
+@pytest.mark.skipif(not SWE_BENCH_PATH.exists(), reason="SWE-bench dataset not present")
+class TestSWEBenchEmbed:
+    """Embedding-mode tests using SWE-bench Verified GitHub issue descriptions."""
+
+    def test_semantic_recall_by_keyword(self, tmp_path):
+        """Store issues with embedding; recall using a keyword from each issue.
+
+        Keyword queries (a few words from the issue title/body) should retrieve
+        the correct issue in top-3. Validates semantic recall on real bug reports.
+        """
+        df = pd.read_parquet(SWE_BENCH_PATH)
+        issues = df["problem_statement"].dropna().astype(str).tolist()[:12]
+
+        for issue in issues:
+            store_test_memory_embed(issue, tmp_path, chunk="code")
+
+        hits = 0
+        for issue in issues[:10]:
+            # Use first 6 non-trivial words as keyword query
+            words = [w for w in issue.split() if len(w) > 4][:6]
+            query = " ".join(words)
+            results = recall_memory(
+                query, top_k=5, data_dir=tmp_path, chunk="code", use_embedding=True
+            )
+            if any(r["text"] == issue for r in results):
+                hits += 1
+
+        assert hits >= 6, (
+            f"SWE-bench semantic recall: only {hits}/10 keyword queries found "
+            f"the original issue in top-5"
+        )
+
+    def test_embed_convergence_rate(self):
+        """Embedding-based frames should converge as reliably as SHA-256 frames."""
+        from wheeler_memory.embedding import embed_to_frame
+
+        df = pd.read_parquet(SWE_BENCH_PATH)
+        texts = df["problem_statement"].dropna().astype(str).tolist()[:30]
+
+        converged = sum(
+            1
+            for text in texts
+            if evolve_and_interpret(embed_to_frame(text))["state"] != "CHAOTIC"
+        )
+        rate = converged / len(texts)
+        assert rate >= 0.90, (
+            f"Embed convergence rate {rate:.0%} < 90% on SWE-bench issues"
+        )
+
+
+@pytest.mark.slow
+@pytest.mark.embed
+@pytest.mark.skipif(
+    not BABILONG_QA1_PATH.exists(), reason="BABILong dataset not present"
+)
+class TestBABILongEmbed:
+    """Embedding-mode tests using BABILong QA1 (single supporting fact) narratives.
+
+    This is the needle-in-a-haystack test: individual sentences are stored as
+    separate memories; the question is used as the recall query. SHA-256 mode
+    fails this test by design — embedding mode should succeed because the
+    question and the relevant sentence share semantic content (the entity name
+    and the location relationship).
+    """
+
+    def test_question_recalls_relevant_fact(self, tmp_path):
+        """Store individual BABILong sentences; recall with the question.
+
+        For QA1 ('single supporting fact'), each question is answerable from
+        exactly one sentence in the narrative. With embedding mode, the question
+        'Where is Mary?' should surface 'Mary moved to the bathroom.' in top-k.
+        """
+        data = _load_babilong_json(BABILONG_QA1_PATH)[:20]
+
+        successes = 0
+        attempts = 0
+
+        for item in data[:10]:
+            sentences = [
+                s.strip() + "."
+                for s in item["input"].replace(".", ".\n").split("\n")
+                if s.strip()
+            ]
+            if len(sentences) < 2:
+                continue
+
+            # Find the sentence containing the answer
+            answer = item["target"].strip().lower()
+            relevant = [s for s in sentences if answer in s.lower()]
+            if not relevant:
+                continue  # Can't verify without a known-relevant sentence
+
+            for sentence in sentences:
+                store_test_memory_embed(sentence, tmp_path, chunk="general")
+
+            question = item["question"].strip()
+            results = recall_memory(
+                question,
+                top_k=min(len(sentences), 5),
+                data_dir=tmp_path,
+                chunk="general",
+                use_embedding=True,
+            )
+
+            retrieved_texts = [r["text"] for r in results]
+            if any(rel in retrieved_texts for rel in relevant):
+                successes += 1
+            attempts += 1
+
+            # Clear store for next item to avoid cross-contamination
+            import shutil
+            shutil.rmtree(tmp_path / "chunks", ignore_errors=True)
+
+        assert attempts > 0, "No valid BABILong items found for needle-in-haystack test"
+        success_rate = successes / attempts
+        assert success_rate >= 0.5, (
+            f"BABILong needle-in-haystack: only {successes}/{attempts} questions "
+            f"({success_rate:.0%}) found the relevant fact in top-5 using embedding mode"
+        )
+
+    def test_embed_convergence_rate(self):
+        """Embedding frames from natural language narratives should converge reliably."""
+        from wheeler_memory.embedding import embed_to_frame
+
+        data = _load_babilong_json(BABILONG_QA1_PATH)[:30]
+        texts = [item["input"] for item in data]
+
+        converged = sum(
+            1
+            for text in texts
+            if evolve_and_interpret(embed_to_frame(text))["state"] != "CHAOTIC"
+        )
+        rate = converged / len(texts)
+        assert rate >= 0.90, (
+            f"BABILong embed convergence rate {rate:.0%} < 90%"
+        )

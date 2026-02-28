@@ -27,6 +27,20 @@ def store_test_memory(text: str, data_dir: Path, chunk: str = "general") -> str:
     return store_memory(text, result, brick, data_dir=data_dir, chunk=chunk, auto_evict=False)
 
 
+def store_test_memory_embed(text: str, data_dir: Path, chunk: str = "general") -> str:
+    """Store a memory using semantic embedding (embed_to_frame) instead of SHA-256.
+
+    Both store and recall must use embedding mode for semantic cross-text recall
+    to work — this helper ensures the store side uses the embedding path.
+    Requires sentence-transformers to be installed.
+    """
+    from wheeler_memory.embedding import embed_to_frame
+    frame = embed_to_frame(text)
+    result = evolve_and_interpret(frame)
+    brick = MemoryBrick.from_evolution_result(result)
+    return store_memory(text, result, brick, data_dir=data_dir, chunk=chunk, auto_evict=False)
+
+
 def age_memory(data_dir: Path, chunk: str, hex_key: str, days: float) -> None:
     """Backdate a memory's timestamps by N days (simulates aging)."""
     chunk_dir = data_dir / "chunks" / chunk

@@ -37,6 +37,7 @@ Repository = "https://github.com/fantomx42/wheeler-memory"
 testpaths = ["tests"]
 markers = [
     "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+    "embed: marks tests requiring sentence-transformers (deselect with '-m \"not embed\"')",
 ]
 
 [tool.setuptools.packages.find]
