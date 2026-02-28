@@ -63,27 +63,12 @@ wheeler-scrub path/to/brick.npz                              # direct path
 
 Opens an interactive matplotlib viewer with a tick slider.
 
-## Diversity report
-
-```bash
-wheeler-diversity
-# Evolves 20 diverse test inputs, computes pairwise correlations.
-# PASS when avg correlation < 0.5 and max < 0.85.
-```
-
 ## GPU benchmark
 
 ```bash
 wheeler-bench-gpu                                # CPU vs GPU comparison
 wheeler-bench-gpu --verify-only                  # correctness check only
 wheeler-bench-gpu --batch-sizes 100,500,2000     # custom sizes
-```
-
-## Large-scale diversity (UltraData-Math)
-
-```bash
-wheeler-diversity-math --n 1000                  # 1K samples (CPU)
-wheeler-diversity-math --n 1000 --gpu            # 1K samples (GPU batch)
 ```
 
 ## Inspect temperatures
@@ -131,3 +116,19 @@ Thresholds are temperature-tiered:
 - **Cold (<0.3)** — aggressive pruning (~15-25% frames retained)
 
 Already-consolidated bricks are skipped (idempotent). This is distinct from eviction — consolidation reduces storage while preserving the formation story at key transition points.
+
+## LLM agent
+
+```bash
+wheeler-agent                      # start the Ollama/qwen3 agent loop
+```
+
+The agent recalls relevant memories before each response, stores the exchange afterward, and uses temperature to calibrate epistemic confidence language ("I remember…" vs. "I vaguely recall…"). Requires Ollama running locally.
+
+## Web dashboard
+
+```bash
+wheeler-ui                         # launch on http://localhost:7437
+```
+
+Opens a local browser dashboard for storing, recalling, and browsing memories. See `ui/README.md` for details.
