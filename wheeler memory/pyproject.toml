@@ -20,16 +20,14 @@ embed = ["sentence-transformers>=3.0"]
 [project.scripts]
 wheeler-store = "scripts.wheeler_store:main"
 wheeler-recall = "scripts.wheeler_recall:main"
-wheeler-diversity = "scripts.test_diversity:main"
-wheeler-diversity-math = "scripts.test_diversity_math:main"
-wheeler-scrub = "scripts.scrub_brick:main"
 wheeler-temps = "scripts.wheeler_temps:main"
-wheeler-bench-gpu = "scripts.bench_gpu:main"
-wheeler-info = "scripts.system_info:main"
 wheeler-forget = "scripts.wheeler_forget:main"
 wheeler-sleep = "scripts.wheeler_sleep:main"
 wheeler-agent = "scripts.wheeler_agent:main"
-wheeler = "scripts.wheeler_ui:main"
+wheeler-info = "scripts.system_info:main"
+wheeler-bench-gpu = "scripts.bench_gpu:main"
+wheeler-scrub = "scripts.scrub_brick:main"
+wheeler-ui = "scripts.wheeler_ui:main"
 
 [tool.setuptools.packages.find]
 include = ["wheeler_memory*", "scripts*"]

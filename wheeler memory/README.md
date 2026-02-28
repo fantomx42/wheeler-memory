@@ -403,8 +403,8 @@ recall("query text")
 ## Installation
 
 ```bash
-git clone <repo>
-cd wheeler_memory
+git clone https://github.com/fantomx42/friendly-enigma.git
+cd friendly-enigma
 pip install -e .
 
 # Optional: semantic embedding support

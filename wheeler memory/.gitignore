@@ -9,9 +9,6 @@ build/
 *.so
 .claude/
 
-# Specific binaries
-libwheeler_ca.so
-
 # Model cache
 .cache/
 models/
