@@ -29,5 +29,9 @@ wheeler-bench-gpu = "scripts.bench_gpu:main"
 wheeler-scrub = "scripts.scrub_brick:main"
 wheeler-ui = "scripts.wheeler_ui:main"
 
+[project.urls]
+Homepage = "https://github.com/fantomx42/wheeler-memory"
+Repository = "https://github.com/fantomx42/wheeler-memory"
+
 [tool.setuptools.packages.find]
 include = ["wheeler_memory*", "scripts*"]

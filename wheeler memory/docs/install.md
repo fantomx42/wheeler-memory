@@ -10,8 +10,8 @@
 Clone the repository and install in editable mode:
 
 ```bash
-git clone https://github.com/fantomx42/friendly-enigma.git
-cd "wheeler memory"
+git clone https://github.com/fantomx42/wheeler-memory.git
+cd wheeler-memory
 python -m venv .venv && source .venv/bin/activate
 pip install -e .
 ```
