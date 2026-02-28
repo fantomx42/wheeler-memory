@@ -15,3 +15,6 @@ models/
 *.pt
 *.bin
 *.safetensors
+
+# Datasets (large, ~35GB total)
+datasets/
