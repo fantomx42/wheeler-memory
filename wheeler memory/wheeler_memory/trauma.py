@@ -15,8 +15,7 @@ import json
 from datetime import datetime, timezone
 from pathlib import Path
 
-from .dynamics import evolve_and_interpret
-from .hashing import hash_to_frame, text_to_hex
+from .hashing import text_to_hex
 from .storage import _get_data_dir, _load_index, store_memory
 from .rotation import store_with_rotation_retry
 from .chunking import get_chunk_dir, select_chunk
@@ -109,25 +108,33 @@ def store_trauma(
     )
     experience_hex = text_to_hex(text)
 
-    # ── 2. Avoidance seed (always hash-based, never embedding) ──────────────
+    # ── 2. Avoidance attractor — opposite polarity of the experience ─────────
+    # The avoidance attractor is the bitwise inverse of the experience attractor
+    # (negated frame), placing it antipodal in CA state space.  No separate CA
+    # evolution is needed; the two attractors are geometrically opposite by
+    # construction (Pearson correlation ≈ -1).
     avoidance_text = AVOIDANCE_PREFIX + text
     avoidance_hex = text_to_hex(avoidance_text)
-    avoidance_seed = hash_to_frame(avoidance_text)
+    avoidance_frame = -exp_result["attractor"]
 
     budget = compute_attention_budget(
         salience if salience is not None else SALIENCE_DEFAULT
     )
 
-    av_result = evolve_and_interpret(
-        avoidance_seed,
-        max_iters=budget.max_iters,
-        stability_threshold=budget.stability_threshold,
-    )
-    av_result["metadata"]["rotation_used"] = 0
-    av_result["metadata"]["attempts"] = 1
-    av_result["metadata"]["salience"] = budget.salience
-    av_result["metadata"]["attention_label"] = budget.label
-    av_result["metadata"]["stability_threshold"] = budget.stability_threshold
+    av_result = {
+        "state": "CONVERGED",
+        "attractor": avoidance_frame,
+        "convergence_ticks": 0,
+        "history": [avoidance_frame],
+        "metadata": {
+            "rotation_used": 0,
+            "attempts": 1,
+            "salience": budget.salience,
+            "attention_label": budget.label,
+            "stability_threshold": budget.stability_threshold,
+            "polarity": "inverted",
+        },
+    }
 
     # ── 3. Store avoidance entry in the same chunk ───────────────────────────
     if av_result["state"] == "CONVERGED":
