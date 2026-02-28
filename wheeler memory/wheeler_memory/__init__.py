@@ -53,13 +53,21 @@ from .consolidation import (
 )
 from .warming import get_neighbors, load_associations
 
-# GPU backend (optional — available only when libwheeler_ca.so is built)
+# GPU backend (optional — available only when a HIP .so is built)
 try:
-    from .gpu_dynamics import gpu_available, gpu_evolve_batch, gpu_evolve_single
+    from .gpu_dynamics import (
+        gpu_available,
+        gpu_evolve_batch,
+        gpu_evolve_single,
+        gpu_version,
+        gpu_query_vram,
+    )
 except ImportError:
     gpu_available = lambda: False
     gpu_evolve_single = None
     gpu_evolve_batch = None
+    gpu_version = lambda: None
+    gpu_query_vram = lambda *_: None
 
 # Embedding backend (optional — requires sentence-transformers)
 try:
@@ -123,6 +131,8 @@ __all__ = [
     "gpu_available",
     "gpu_evolve_single",
     "gpu_evolve_batch",
+    "gpu_version",
+    "gpu_query_vram",
     # Embedding (optional)
     "embed_available",
     "embed_to_frame",

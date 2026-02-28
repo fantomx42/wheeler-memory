@@ -26,16 +26,20 @@ sudo pacman -S rocm-hip-sdk
 
 ```bash
 cd wheeler_memory/gpu
-make                    # default target: gfx1201 (RX 9070 XT)
-GPU_ARCH=gfx1100 make  # RDNA 3 (RX 7000 series)
-GPU_ARCH=gfx906  make  # Vega / RX 5000 series
+make v2                    # recommended: v2 (variable grid, global memory)
+make                       # v1 only (64×64 fixed grid, legacy)
+make all                   # build both v1 and v2
+
+GPU_ARCH=gfx1100 make v2  # RDNA 3 (RX 7000 series)
+GPU_ARCH=gfx906  make v2  # Vega / RX 5000 series
 ```
 
-This produces `wheeler_memory/gpu/libwheeler_ca.so`. The Python bindings in
-`wheeler_memory/gpu_dynamics.py` load it via `ctypes` at import time.
+This produces `wheeler_memory/gpu/libwheeler_ca_v2.so` (or `libwheeler_ca.so`
+for v1). The Python bindings in `wheeler_memory/gpu_dynamics.py` try v2 first,
+falling back to v1 if only v1 is built.
 
 After a successful build, `gpu_available()` returns `True` and batch evolution
-automatically uses the GPU.
+automatically uses the GPU. Call `gpu_version()` to confirm which kernel loaded.
 
 ---
 
@@ -165,13 +169,17 @@ numerical correctness with `np.allclose(atol=1e-4)`.
 
 ```python
 from wheeler_memory import gpu_available, gpu_evolve_batch, gpu_evolve_single
+from wheeler_memory.gpu_dynamics import gpu_version, gpu_query_vram
 from wheeler_memory.hashing import hash_to_frame
 
 if gpu_available():
-    # Single input
+    print(f"GPU kernel v{gpu_version()} loaded")  # v2 or v1
+
+    # Single input (64×64 default)
     frame = hash_to_frame("some text")
     result = gpu_evolve_single(frame)
     print(result["state"], result["convergence_ticks"])
+    print(result["metadata"])  # {"backend": "gpu_v2", "grid_w": 64}
 
     # Batch (where the speedup is)
     texts = ["memory one", "memory two", "memory three"]
@@ -179,46 +187,113 @@ if gpu_available():
     results = gpu_evolve_batch(frames)
     for r in results:
         print(r["state"])
+
+    # v2: variable grid size
+    import numpy as np
+    big_frame = np.random.rand(256, 256).astype(np.float32)
+    result = gpu_evolve_single(big_frame, grid_w=256)
+
+    # v2: VRAM estimation before allocating a large batch
+    vram = gpu_query_vram(batch_size=1000, grid_w=256)
+    if vram:
+        print(f"~{vram / 1e6:.1f} MB needed")
 else:
-    print("GPU kernel not built — run: cd wheeler_memory/gpu && make")
+    print("GPU kernel not built — run: cd wheeler_memory/gpu && make v2")
 ```
 
 ---
 
-## Architecture of the HIP kernel
+## Architecture of the HIP kernel (v2 — current)
 
 ```
-Input frames  (B × 64 × 64)
+Input frames  (B × W × W)          W = any grid width (64 … 1000+)
     ↓
 hipMemcpy → GPU device memory
+    ↓  (iteration loop)
+Kernel 1 — ca_step_kernel: B×W² threads (16×16 blocks, 2D spatial tiling)
+  each thread: read 4 neighbours → apply 3-state rule → atomic delta accumulation
     ↓
-ca_step_kernel: B × 4096 threads in parallel
-  each thread: read 4 neighbours → apply 3-state rule → write next state
+Kernel 2 — convergence_check_kernel: mean |Δ| < stability_threshold → CONVERGED
     ↓
-reduce_delta_kernel: mean |Δ| per frame (shared-memory reduction)
+Kernel 3 — role_compute_kernel: classify cells → write to 20-slot ring buffer
     ↓
-check convergence threshold → repeat or stop
+Kernels 4+5 — oscillation_detect / finalize: period-2…10 detection (every 10 iters)
+    ↓
+(poll for all-done every 50 iterations)
     ↓
 hipMemcpy → CPU result arrays
 ```
 
-The GPU path produces numerically identical results to the CPU path
+V2 uses global memory and a ping-pong grid layout, removing the 64×64 shared-memory
+limit of v1. The ring buffer enables oscillation detection across large grids.
+
+### v1 architecture (legacy fallback)
+
+```
+Input frames  (B × 64 × 64)        fixed 64×64 grid only
+    ↓
+hipMemcpy → GPU device memory
+    ↓
+ca_step_kernel: B × 4096 threads (shared-memory reduction)
+    ↓
+reduce_delta_kernel: mean |Δ| per frame
+    ↓
+check compiled-in threshold → repeat or stop
+    ↓
+hipMemcpy → CPU result arrays
+```
+
+Both GPU paths produce numerically identical results to the CPU path
 (verified via `np.allclose` with `atol=1e-4`).
 
 ### Key files
 
 | File | Purpose |
 |---|---|
-| `wheeler_memory/gpu/ca_kernel.hip` | HIP C++ kernel source |
+| `wheeler_memory/gpu/ca_kernel_v2.hip` | HIP C++ kernel v2 (variable grid, global memory) |
+| `wheeler_memory/gpu/ca_kernel.hip` | HIP C++ kernel v1 (64×64, shared memory — legacy) |
 | `wheeler_memory/gpu/Makefile` | Build script |
-| `wheeler_memory/gpu/libwheeler_ca.so` | Compiled shared library (not in git — build with `make`; verified working on RX 9070 XT) |
-| `wheeler_memory/gpu_dynamics.py` | Python `ctypes` bindings |
+| `wheeler_memory/gpu/libwheeler_ca_v2.so` | Compiled v2 library (not in git — build with `make v2`) |
+| `wheeler_memory/gpu/libwheeler_ca.so` | Compiled v1 library (not in git — build with `make`; verified working on RX 9070 XT) |
+| `wheeler_memory/gpu_dynamics.py` | Python `ctypes` bindings (loads v2, falls back to v1) |
 | `scripts/bench_gpu.py` | `wheeler-bench-gpu` entry point |
+
+---
+
+## Building v2
+
+```bash
+cd wheeler_memory/gpu
+make v2                    # gfx1201 (RX 9070 XT)
+GPU_ARCH=gfx1100 make v2  # RDNA 3 (RX 7000 series)
+```
+
+The Python bindings load `libwheeler_ca_v2.so` first. If found, v2 is used
+automatically — no code changes required. `gpu_version()` returns `2`.
+
+### Variable grid size (v2 only)
+
+```python
+from wheeler_memory import gpu_evolve_batch
+from wheeler_memory.gpu_dynamics import gpu_version, gpu_query_vram
+import numpy as np
+
+print(gpu_version())   # 2
+
+# 256×256 grid — not possible with v1
+big_frame = np.random.rand(256, 256).astype(np.float32)
+result = gpu_evolve_batch([big_frame], grid_w=256)
+print(result[0]["state"])
+
+# Estimate VRAM before allocating
+vram = gpu_query_vram(batch_size=500, grid_w=256)
+print(f"~{vram / 1e6:.1f} MB needed")
+```
 
 ---
 
 ## Fallback
 
-If `libwheeler_ca.so` is not built, `gpu_available()` returns `False` and all
-CPU functionality works unchanged. The GPU backend is strictly opt-in — nothing
-breaks if you skip the build step.
+If neither `libwheeler_ca_v2.so` nor `libwheeler_ca.so` is built, `gpu_available()`
+returns `False` and all CPU functionality works unchanged. The GPU backend is
+strictly opt-in — nothing breaks if you skip the build step.
