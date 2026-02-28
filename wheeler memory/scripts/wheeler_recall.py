@@ -38,6 +38,10 @@ def main():
         "--salience", choices=["low", "medium", "high"], default=None,
         help="Attention level: low (fast/loose), medium (default), high (deep/tight)",
     )
+    parser.add_argument(
+        "--safe-context", action="store_true",
+        help="Apply safe exposure: increment safe_recall_count on any avoidance link that fires, decaying its weight",
+    )
     args = parser.parse_args()
 
     sal = salience_from_label(args.salience) if args.salience else None
@@ -51,6 +55,7 @@ def main():
         reconstruct=args.reconstruct,
         reconstruct_alpha=args.alpha,
         salience=sal,
+        safe_context=args.safe_context,
     )
 
     if not results:
@@ -70,6 +75,12 @@ def main():
                 f"{r.get('reconstruction_state', '?'):<12} "
                 f"{chunk_name:<12} {text_preview}"
             )
+            if "avoidance_firing" in r:
+                av = r["avoidance_firing"]
+                print(f"  \u26a0  AVOIDANCE FIRES  weight={av['weight']:.2f}  safe_exposures={av['safe_recall_count']}")
+                print(f'     "{av["text"]}"')
+                if args.safe_context and "new_weight" in av:
+                    print(f"     \u2192 weight after exposure: {av['new_weight']:.4f}")
     else:
         print(f"{'Rank':<5} {'Similarity':>10}  {'Temp':>5} {'Tier':<5} {'Chunk':<12} {'State':<12} {'Ticks':>5}  Text")
         print("-" * 95)
@@ -81,6 +92,12 @@ def main():
                 f"{r['temperature']:>5.3f} {r['temperature_tier']:<5} "
                 f"{chunk_name:<12} {r['state']:<12} {r['convergence_ticks']:>5}  {text_preview}"
             )
+            if "avoidance_firing" in r:
+                av = r["avoidance_firing"]
+                print(f"  \u26a0  AVOIDANCE FIRES  weight={av['weight']:.2f}  safe_exposures={av['safe_recall_count']}")
+                print(f'     "{av["text"]}"')
+                if args.safe_context and "new_weight" in av:
+                    print(f"     \u2192 weight after exposure: {av['new_weight']:.4f}")
 
 
 if __name__ == "__main__":

@@ -62,6 +62,8 @@ Wheeler Memory is a functional associative memory system. The implemented compon
 | Sleep consolidation | `consolidation.py` | ✅ Implemented |
 | Attention model (variable ticks) | `attention.py` | ✅ Implemented |
 | LLM integration (Ollama/qwen3 agent) | `agent.py` | ✅ Implemented |
+| Trauma encoding (dual-attractor) | `trauma.py` | ✅ Implemented |
+| Exposure therapy (safe-context) | `trauma.py` | ✅ Implemented |
 | Web UI (local browser dashboard) | `wheeler_ui.py` | ✅ Implemented |
 
 ---
@@ -268,12 +270,12 @@ osc = detect_oscillation(history)
 
 `gpu_dynamics.py` provides a Python interface to a compiled HIP kernel (`libwheeler_ca.so`). The interface matches the CPU API. The kernel supports single-frame and batch evolution.
 
-**Status**: The interface is implemented but `libwheeler_ca.so` is not compiled. To build:
+**Status**: Compiled and active — `libwheeler_ca.so` is present at `wheeler_memory/gpu/libwheeler_ca.so`. `evolve_and_interpret()` automatically uses the GPU when the library is detected, falling back to CPU otherwise. To rebuild:
 ```bash
 cd wheeler_memory/gpu && make
 ```
 
-When the library is not present, all imports fall back to `lambda: False` / `None` gracefully.
+When the library is not present, all calls fall back to the pure-NumPy CPU path transparently.
 
 ---
 
@@ -299,6 +301,15 @@ wheeler-recall --embed "machine learning frameworks"
 wheeler-recall --reconstruct "machine learning frameworks"
 wheeler-recall --reconstruct --alpha 0.5 "machine learning frameworks"
 
+# Store a traumatic memory (experience + avoidance attractors)
+wheeler-store --trauma "I got burned by the stove"
+
+# Recall with avoidance companion display
+wheeler-recall "burned stove"
+
+# Exposure therapy: reduce avoidance link weight
+wheeler-recall --safe-context "burned stove"
+
 # List all memories with temperature
 wheeler-temps
 
@@ -318,7 +329,7 @@ wheeler-bench-gpu
 ```
 wheeler_memory/
 ├── attention.py       Attention model: salience → CA budget (variable tick rates)
-├── dynamics.py        CA engine: apply_ca_dynamics(), evolve_and_interpret()
+├── dynamics.py        CA engine: apply_ca_dynamics(), evolve_and_interpret() (GPU-dispatched)
 ├── hashing.py         SHA-256 text-to-frame seeding
 ├── temperature.py     Wall-clock temperature computation and tier classification
 ├── storage.py         Attractor storage (disk) and Pearson recall
@@ -330,7 +341,8 @@ wheeler_memory/
 ├── oscillation.py     Role-space periodicity detection
 ├── hardware.py        CPU/GPU/NPU detection, device selection
 ├── gpu_dynamics.py    HIP kernel interface (requires compiled libwheeler_ca.so)
-└── gpu/               HIP kernel source (not compiled)
+├── trauma.py          Dual-attractor trauma encoding and exposure therapy
+└── gpu/               HIP kernel source and compiled libwheeler_ca.so
 
 scripts/
 ├── wheeler_store.py   CLI: store memories
@@ -355,7 +367,8 @@ scripts/
 │   ├── daily_tasks/
 │   ├── meta/
 │   └── general/
-└── rotation_stats.json                per-angle convergence stats
+├── rotation_stats.json                per-angle convergence stats
+└── chunks/*/associations.json         association graph; avoidance_link edges include safe_recall_count
 ```
 
 ### System Flow
@@ -412,21 +425,14 @@ pip install -e ".[embed]"
 - ~~**Eviction / forgetting**~~ — graceful degradation of cold memories (fade, evict, capacity limits) ✅
 - ~~**Sleep consolidation**~~ — prune redundant intermediate frames within bricks ✅
 - ~~**Variable tick rates (attention model)**~~ — salience-driven CA budgets: high-salience inputs get deeper attractor formation ✅
+- ~~**LLM Integration (Phase 4)**~~ — Ollama/qwen3 agent loop: recall → context → LLM → store response ✅
+- ~~**Dual-Attractor Trauma Encoding**~~ — experience + avoidance attractors; `--trauma` flag; exposure therapy via `--safe-context` ✅
+- ~~**GPU backend wired into store/recall**~~ — `evolve_and_interpret()` transparently dispatches to GPU when `libwheeler_ca.so` is present (70× speedup on RX 9070 XT) ✅
 
 ### Planned
 
-#### LLM Integration (Phase 4)
-Connect Wheeler Memory to a local LLM (Ollama/qwen3). The full agent loop:
-```
-query → Wheeler recall → temperature-weighted context → LLM prompt
-response → store as new attractor → warm associated attractors
-```
-
-#### Dual-Attractor Trauma Encoding
-Traumatic events create two linked attractors: experience + avoidance. The avoidance attractor fires when the experience attractor is recalled. Exposure therapy = repeatedly activating experience in safe context without activating avoidance.
-
 #### GPU at Scale
-When `libwheeler_ca.so` is compiled and larger grids are used (e.g. 1000×1000), the GPU batch evolution path handles parallel attractor formation without storing per-tick history.
+Larger grids (e.g. 1000×1000) with the GPU batch evolution path for parallel attractor formation across the full memory store.
 
 ---
 

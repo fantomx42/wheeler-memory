@@ -68,10 +68,13 @@ def store_memory(
     *,
     chunk: str | None = None,
     auto_evict: bool = True,
+    memory_type: str | None = None,
 ) -> str:
     """Save attractor, brick, and index entry for a memory.
 
     Returns the hex hash key used for storage.
+    When memory_type is set (e.g. "avoidance"), it is written into the
+    index entry's metadata so recall can filter or classify the entry.
     """
     d = _get_data_dir(data_dir)
     if chunk is None:
@@ -88,6 +91,8 @@ def store_memory(
     base_metadata = result.get("metadata", {})
     base_metadata["hit_count"] = 0
     base_metadata["last_accessed"] = now_iso
+    if memory_type is not None:
+        base_metadata["memory_type"] = memory_type
     index[hex_key] = {
         "text": text,
         "state": result["state"],
@@ -118,6 +123,7 @@ def recall_memory(
     reconstruct: bool = False,
     reconstruct_alpha: float = 0.3,
     salience: float | None = None,
+    safe_context: bool = False,
 ) -> list[dict]:
     """Recall stored memories by Pearson correlation with the query's attractor.
 
@@ -129,6 +135,12 @@ def recall_memory(
     the query attractor and re-evolved through the CA (Darman architecture).
     When salience is set, the query evolution and reconstruction use the
     corresponding attention budget (variable tick rates).
+    When safe_context is True, each avoidance link that fires receives an
+    incremented safe_recall_count (exposure therapy); results include
+    "new_weight" in their avoidance_firing companion dict.
+
+    Avoidance attractors (memory_type=="avoidance") are never surfaced as
+    independent results; they only appear as "avoidance_firing" companions.
     """
     d = _get_data_dir(data_dir)
     budget = compute_attention_budget(
@@ -169,6 +181,10 @@ def recall_memory(
         warmth_data = load_warmth(chunk_dir)
 
         for hex_key, meta in index.items():
+            # Avoidance attractors are never surfaced as independent results
+            if meta.get("metadata", {}).get("memory_type") == "avoidance":
+                continue
+
             attractor_path = chunk_dir / "attractors" / f"{hex_key}.npy"
             if not attractor_path.exists():
                 continue
@@ -204,6 +220,18 @@ def recall_memory(
 
     results.sort(key=lambda r: r["effective_similarity"], reverse=True)
     top_results = results[:top_k]
+
+    # Avoidance companion injection: for each top result, check if an
+    # avoidance link exists. Attach companion; apply safe exposure if requested.
+    from .trauma import apply_safe_exposure, get_avoidance_companion
+    for r in top_results:
+        result_chunk_dir = d / "chunks" / r["chunk"]
+        companion = get_avoidance_companion(r["hex_key"], result_chunk_dir)
+        if companion is not None:
+            r["avoidance_firing"] = companion
+            if safe_context:
+                new_weight = apply_safe_exposure(r["hex_key"], result_chunk_dir)
+                r["avoidance_firing"]["new_weight"] = new_weight
 
     # Reconstructive recall: blend each result with query context
     if reconstruct and top_results:

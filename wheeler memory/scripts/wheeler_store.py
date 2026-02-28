@@ -61,6 +61,10 @@ def main():
         "--salience", choices=["low", "medium", "high"], default=None,
         help="Attention level: low (fast/loose), medium (default), high (deep/tight)",
     )
+    parser.add_argument(
+        "--trauma", action="store_true",
+        help="Store as a traumatic memory (creates experience + avoidance attractors linked by avoidance_link edge)",
+    )
     args = parser.parse_args()
 
     text = sys.stdin.read().strip() if args.text == "-" else args.text
@@ -72,6 +76,35 @@ def main():
     auto = args.chunk is None
     chunk = args.chunk if args.chunk else select_chunk(text)
     sal = salience_from_label(args.salience) if args.salience else None
+
+    if args.trauma:
+        from wheeler_memory.trauma import store_trauma
+        trauma_result = store_trauma(
+            text, data_dir=args.data_dir, chunk=chunk,
+            use_embedding=args.embed, salience=sal,
+        )
+        exp = trauma_result["experience"]
+        state = exp["state"]
+        ticks = exp["convergence_ticks"]
+        angle = exp["metadata"].get("rotation_used", 0)
+        attempts = exp["metadata"].get("attempts", 1)
+        wall = exp["metadata"].get("wall_time_seconds", 0)
+        salience_label = exp["metadata"].get("attention_label", "medium")
+        chunk_label = f"{chunk} (auto)" if auto else chunk
+        print(f"Chunk:          {chunk_label}")
+        print(f"State:          {state} (experience)")
+        print(f"Avoidance:      {trauma_result['avoidance_state']}")
+        print(f"Ticks:          {ticks}")
+        print(f"Rotation:       {angle}° (attempt {attempts})")
+        print(f"Salience:       {salience_label}")
+        print(f"Time:           {wall:.3f}s")
+        print(f"Experience key: {trauma_result['experience_hex']}")
+        print(f"Avoidance key:  {trauma_result['avoidance_hex']}")
+        if state == "CONVERGED":
+            print("Trauma stored successfully (experience + avoidance attractors).")
+        elif state == "FAILED_ALL_ROTATIONS":
+            print("Warning: experience attractor failed to converge on all rotations.", file=sys.stderr)
+        return
 
     if args.embed:
         result = _embed_store(text, chunk, args.data_dir, salience=sal)

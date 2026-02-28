@@ -36,6 +36,16 @@ def apply_ca_dynamics(frame: np.ndarray) -> np.ndarray:
     return np.clip(frame + delta, -1, 1)
 
 
+# GPU dispatch — imported after apply_ca_dynamics is defined to avoid circular
+# import (gpu_dynamics imports apply_ca_dynamics from this module).
+try:
+    from .gpu_dynamics import gpu_available, gpu_evolve_single as _gpu_evolve
+    _GPU_READY = gpu_available()
+except ImportError:
+    _GPU_READY = False
+    _gpu_evolve = None
+
+
 def evolve_and_interpret(
     frame: np.ndarray,
     max_iters: int = 1000,
@@ -50,6 +60,21 @@ def evolve_and_interpret(
       - history: list of all frame copies (for brick construction)
       - metadata: additional info (cycle_period, etc.)
     """
+    if _GPU_READY and _gpu_evolve is not None:
+        try:
+            result = _gpu_evolve(
+                frame,
+                max_iters=max_iters,
+                stability_threshold=stability_threshold,
+            )
+            # GPU path doesn't store per-tick history; synthesize a minimal
+            # 2-frame history so MemoryBrick.save() (np.stack) doesn't crash.
+            if not result["history"]:
+                result["history"] = [frame.copy(), result["attractor"].copy()]
+            return result
+        except Exception:
+            pass  # fall through to CPU
+
     history = [frame.copy()]
 
     for i in range(max_iters):

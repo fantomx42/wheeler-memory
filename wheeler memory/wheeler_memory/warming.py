@@ -216,16 +216,20 @@ def propagate_warmth(chunk_dir: Path, fired_keys: list[str]) -> dict[str, float]
     for fired in fired_keys:
         visited = {fired}
 
-        # Hop 1
-        for n1 in edges.get(fired, {}):
+        # Hop 1 — avoidance_link edges do not spread warmth
+        for n1, edge1 in edges.get(fired, {}).items():
+            if edge1.get("source") == "avoidance_link":
+                continue
             if n1 in fired_set:
                 continue
             if n1 not in visited:
                 visited.add(n1)
                 warmed[n1] = warmed.get(n1, 0.0) + WARMTH_HOP1
 
-            # Hop 2
-            for n2 in edges.get(n1, {}):
+            # Hop 2 — avoidance_link edges do not spread warmth
+            for n2, edge2 in edges.get(n1, {}).items():
+                if edge2.get("source") == "avoidance_link":
+                    continue
                 if n2 in visited or n2 in fired_set:
                     continue
                 visited.add(n2)
