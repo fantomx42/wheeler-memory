@@ -1,0 +1,1053 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Wheeler Memory — Chat</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg-primary: #0a0a0f;
+  --bg-secondary: #12121a;
+  --bg-card: rgba(20, 20, 35, 0.7);
+  --bg-card-hover: rgba(30, 30, 50, 0.8);
+  --border-subtle: rgba(255, 255, 255, 0.06);
+  --border-glow: rgba(120, 80, 255, 0.3);
+
+  --text-primary: #e8e6f0;
+  --text-secondary: #9590a8;
+  --text-muted: #5d5875;
+
+  --accent-violet: #8b5cf6;
+  --accent-violet-dim: rgba(139, 92, 246, 0.15);
+  --accent-cyan: #06d6a0;
+  --accent-cyan-dim: rgba(6, 214, 160, 0.15);
+  --accent-magenta: #e040a0;
+  --accent-magenta-dim: rgba(224, 64, 160, 0.15);
+  --accent-amber: #f59e0b;
+  --accent-red: #ef4444;
+  --accent-red-dim: rgba(239, 68, 68, 0.12);
+
+  --radius-sm: 8px;
+  --radius-md: 14px;
+  --radius-lg: 20px;
+
+  --shadow-card: 0 4px 24px rgba(0,0,0,0.4), 0 0 1px rgba(139,92,246,0.2);
+
+  --font-sans: 'Inter', -apple-system, sans-serif;
+  --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+html, body {
+  height: 100%;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+/* ── Header ─────────────────────────────────────────────────────────────── */
+.app-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 20px;
+  height: 52px;
+  border-bottom: 1px solid var(--border-subtle);
+  background: rgba(10, 10, 15, 0.95);
+  backdrop-filter: blur(12px);
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  flex-shrink: 0;
+}
+
+.app-title {
+  font-size: 15px;
+  font-weight: 700;
+  background: linear-gradient(135deg, var(--accent-violet), var(--accent-cyan));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  letter-spacing: -0.3px;
+}
+
+.header-nav { display: flex; align-items: center; gap: 8px; }
+
+.nav-link {
+  color: var(--text-secondary);
+  text-decoration: none;
+  font-size: 13px;
+  font-weight: 500;
+  padding: 4px 10px;
+  border-radius: var(--radius-sm);
+  transition: all 0.15s;
+}
+.nav-link:hover { color: var(--text-primary); background: var(--bg-card); }
+
+.header-actions { display: flex; align-items: center; gap: 8px; }
+
+.btn-xs {
+  padding: 4px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-subtle);
+  background: var(--bg-card);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.15s;
+  font-family: var(--font-sans);
+}
+.btn-xs:hover { color: var(--text-primary); border-color: var(--border-glow); }
+
+.status-dot {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: var(--accent-cyan);
+  box-shadow: 0 0 6px var(--accent-cyan);
+  transition: all 0.3s;
+}
+.status-dot.busy { background: var(--accent-violet); box-shadow: 0 0 8px var(--accent-violet); animation: pulse 1.2s infinite; }
+.status-dot.error { background: var(--accent-red); box-shadow: 0 0 6px var(--accent-red); }
+.status-dot.offline { background: var(--text-muted); box-shadow: none; }
+
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+
+.model-badge {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-muted);
+  padding: 2px 7px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 20px;
+}
+
+/* ── Offline banner ──────────────────────────────────────────────────────── */
+#offlineBanner {
+  display: none;
+  background: var(--accent-red-dim);
+  border-bottom: 1px solid rgba(239,68,68,0.3);
+  color: var(--accent-red);
+  font-size: 13px;
+  font-weight: 500;
+  padding: 8px 20px;
+  text-align: center;
+}
+#offlineBanner.visible { display: block; }
+
+/* ── Layout ─────────────────────────────────────────────────────────────── */
+.app-layout {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  overflow: hidden;
+}
+
+.chat-area {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px;
+  scroll-behavior: smooth;
+}
+
+.chat-area::-webkit-scrollbar { width: 4px; }
+.chat-area::-webkit-scrollbar-track { background: transparent; }
+.chat-area::-webkit-scrollbar-thumb { background: var(--border-subtle); border-radius: 2px; }
+
+.chat-inner {
+  max-width: 760px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding-bottom: 16px;
+}
+
+/* ── Messages ────────────────────────────────────────────────────────────── */
+.message {
+  display: flex;
+  gap: 12px;
+  animation: fadeIn 0.2s ease;
+}
+@keyframes fadeIn { from{opacity:0;transform:translateY(4px)} to{opacity:1;transform:none} }
+
+.message-avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 700;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+.message-user .message-avatar {
+  background: var(--accent-violet-dim);
+  color: var(--accent-violet);
+  border: 1px solid rgba(139,92,246,0.3);
+}
+.message-assistant .message-avatar {
+  background: var(--accent-cyan-dim);
+  color: var(--accent-cyan);
+  border: 1px solid rgba(6,214,160,0.3);
+}
+
+.message-body { flex: 1; min-width: 0; }
+
+.message-bubble {
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: 12px 16px;
+  box-shadow: var(--shadow-card);
+}
+.message-user .message-bubble {
+  background: var(--accent-violet-dim);
+  border-color: rgba(139,92,246,0.2);
+}
+
+/* ── Tool cards ──────────────────────────────────────────────────────────── */
+.tool-card {
+  margin-top: 8px;
+  background: var(--accent-magenta-dim);
+  border: 1px solid rgba(224,64,160,0.2);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  font-size: 12px;
+}
+.tool-card-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 12px;
+  cursor: pointer;
+  user-select: none;
+  color: var(--accent-magenta);
+  font-weight: 600;
+}
+.tool-card-header:hover { background: rgba(224,64,160,0.08); }
+.tool-card-chevron { margin-left: auto; transition: transform 0.2s; font-size: 10px; }
+.tool-card.open .tool-card-chevron { transform: rotate(180deg); }
+.tool-card-body {
+  display: none;
+  padding: 8px 12px;
+  border-top: 1px solid rgba(224,64,160,0.15);
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 200px;
+  overflow-y: auto;
+}
+.tool-card.open .tool-card-body { display: block; }
+.tool-ok { color: var(--accent-cyan); }
+.tool-err { color: var(--accent-red); }
+
+/* Recall cards (cyan variant) */
+.recall-card {
+  margin-top: 8px;
+  background: var(--accent-cyan-dim);
+  border: 1px solid rgba(6,214,160,0.2);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  font-size: 12px;
+}
+.recall-card-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 12px;
+  cursor: pointer;
+  user-select: none;
+  color: var(--accent-cyan);
+  font-weight: 600;
+}
+.recall-card-header:hover { background: rgba(6,214,160,0.08); }
+.recall-card-chevron { margin-left: auto; font-size: 10px; transition: transform 0.2s; }
+.recall-card.open .recall-card-chevron { transform: rotate(180deg); }
+.recall-card-body {
+  display: none;
+  padding: 8px 12px;
+  border-top: 1px solid rgba(6,214,160,0.15);
+  color: var(--text-secondary);
+  font-size: 12px;
+  max-height: 180px;
+  overflow-y: auto;
+}
+.recall-card.open .recall-card-body { display: block; }
+.recall-item { padding: 4px 0; border-bottom: 1px solid var(--border-subtle); }
+.recall-item:last-child { border-bottom: none; }
+.recall-sim { color: var(--accent-cyan); font-family: var(--font-mono); font-size: 11px; }
+.recall-temp { color: var(--text-muted); font-family: var(--font-mono); font-size: 10px; }
+
+/* Thinking blocks */
+.thinking-card {
+  margin-top: 8px;
+  background: rgba(245,158,11,0.06);
+  border: 1px solid rgba(245,158,11,0.15);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  font-size: 12px;
+}
+.thinking-card-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  cursor: pointer;
+  color: var(--accent-amber);
+  font-weight: 500;
+  opacity: 0.8;
+  user-select: none;
+}
+.thinking-card-header:hover { opacity: 1; }
+.thinking-card-chevron { margin-left: auto; font-size: 10px; transition: transform 0.2s; }
+.thinking-card.open .thinking-card-chevron { transform: rotate(180deg); }
+.thinking-card-body {
+  display: none;
+  padding: 8px 12px;
+  border-top: 1px solid rgba(245,158,11,0.1);
+  color: var(--text-muted);
+  font-style: italic;
+  font-size: 12px;
+  white-space: pre-wrap;
+  max-height: 200px;
+  overflow-y: auto;
+}
+.thinking-card.open .thinking-card-body { display: block; }
+
+/* Auto-store badge */
+.store-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 6px;
+  font-size: 11px;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+}
+
+/* Error card */
+.error-card {
+  margin-top: 8px;
+  background: var(--accent-red-dim);
+  border: 1px solid rgba(239,68,68,0.3);
+  border-radius: var(--radius-sm);
+  padding: 10px 14px;
+  color: var(--accent-red);
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.retry-btn {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 10px;
+  border: 1px solid rgba(239,68,68,0.5);
+  background: transparent;
+  color: var(--accent-red);
+  border-radius: 6px;
+  cursor: pointer;
+  font-family: var(--font-sans);
+  white-space: nowrap;
+}
+.retry-btn:hover { background: rgba(239,68,68,0.15); }
+
+/* Typing indicator */
+.typing-indicator {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 10px 14px;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+.typing-dots { display: flex; gap: 4px; }
+.typing-dot {
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: var(--text-muted);
+  animation: blink 1.2s infinite;
+}
+.typing-dot:nth-child(2) { animation-delay: 0.2s; }
+.typing-dot:nth-child(3) { animation-delay: 0.4s; }
+@keyframes blink { 0%,80%,100%{opacity:0.2} 40%{opacity:1} }
+
+/* ── Markdown content ────────────────────────────────────────────────────── */
+.md p { margin-bottom: 10px; }
+.md p:last-child { margin-bottom: 0; }
+.md strong { font-weight: 600; color: var(--text-primary); }
+.md em { font-style: italic; color: var(--text-secondary); }
+.md code {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  background: rgba(255,255,255,0.07);
+  padding: 1px 5px;
+  border-radius: 4px;
+  color: var(--accent-cyan);
+}
+.md pre {
+  background: rgba(0,0,0,0.3);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  padding: 12px 14px;
+  overflow-x: auto;
+  margin: 10px 0;
+}
+.md pre code {
+  background: none;
+  padding: 0;
+  color: var(--text-primary);
+  font-size: 12px;
+}
+.md ul, .md ol { padding-left: 20px; margin: 8px 0; }
+.md li { margin: 3px 0; }
+.md a { color: var(--accent-violet); text-decoration: none; }
+.md a:hover { text-decoration: underline; }
+.md h1,.md h2,.md h3 { font-weight: 600; margin: 14px 0 6px; }
+.md h1 { font-size: 17px; } .md h2 { font-size: 15px; } .md h3 { font-size: 14px; }
+.md blockquote {
+  border-left: 3px solid var(--accent-violet);
+  padding-left: 12px;
+  color: var(--text-secondary);
+  margin: 8px 0;
+}
+.md hr { border: none; border-top: 1px solid var(--border-subtle); margin: 12px 0; }
+
+/* ── Input area ──────────────────────────────────────────────────────────── */
+.input-area {
+  border-top: 1px solid var(--border-subtle);
+  background: rgba(10,10,15,0.95);
+  padding: 14px 20px;
+  flex-shrink: 0;
+}
+
+.input-inner {
+  max-width: 760px;
+  margin: 0 auto;
+  display: flex;
+  gap: 10px;
+  align-items: flex-end;
+}
+
+.chat-textarea {
+  flex: 1;
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: 10px 14px;
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  line-height: 1.5;
+  resize: none;
+  outline: none;
+  transition: border-color 0.15s;
+  min-height: 44px;
+  max-height: 180px;
+  overflow-y: auto;
+}
+.chat-textarea:focus { border-color: var(--border-glow); }
+.chat-textarea::placeholder { color: var(--text-muted); }
+
+.send-btn {
+  height: 44px;
+  padding: 0 18px;
+  background: linear-gradient(135deg, var(--accent-violet), #7c3aed);
+  color: #fff;
+  border: none;
+  border-radius: var(--radius-md);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: var(--font-sans);
+  transition: opacity 0.15s, transform 0.1s;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.send-btn:hover { opacity: 0.9; }
+.send-btn:active { transform: scale(0.97); }
+.send-btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+
+.input-hint {
+  max-width: 760px;
+  margin: 4px auto 0;
+  font-size: 11px;
+  color: var(--text-muted);
+  text-align: right;
+}
+
+/* ── Scroll-to-bottom button ─────────────────────────────────────────────── */
+#scrollBtn {
+  display: none;
+  position: fixed;
+  bottom: 90px;
+  right: 24px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-glow);
+  color: var(--accent-violet);
+  padding: 6px 12px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: var(--shadow-card);
+  z-index: 50;
+}
+#scrollBtn.visible { display: block; }
+</style>
+</head>
+<body>
+<div class="app-layout">
+
+  <!-- Header -->
+  <header class="app-header">
+    <span class="app-title">Wheeler Memory</span>
+    <nav class="header-nav">
+      <a href="/" class="nav-link">Dashboard</a>
+    </nav>
+    <div class="header-actions">
+      <span class="model-badge" id="modelBadge">qwen3</span>
+      <button class="btn-xs" onclick="newChat()">New Chat</button>
+      <span id="statusDot" class="status-dot offline" title="Checking Ollama..."></span>
+    </div>
+  </header>
+
+  <!-- Offline banner -->
+  <div id="offlineBanner">
+    Ollama is not running. Start it with: <code style="font-family:var(--font-mono)">ollama serve</code>
+  </div>
+
+  <!-- Chat messages -->
+  <div class="chat-area" id="chatArea">
+    <div class="chat-inner" id="chatInner">
+      <!-- messages injected here -->
+    </div>
+  </div>
+
+  <!-- Input -->
+  <div class="input-area">
+    <div class="input-inner">
+      <textarea
+        id="chatInput"
+        class="chat-textarea"
+        placeholder="Message Wheeler Memory... (Enter to send, Shift+Enter for newline)"
+        rows="1"
+      ></textarea>
+      <button class="send-btn" id="sendBtn" onclick="handleSend()">Send</button>
+    </div>
+    <div class="input-hint">Enter to send · Shift+Enter for new line</div>
+  </div>
+
+</div>
+
+<!-- Scroll to bottom button -->
+<button id="scrollBtn" onclick="scrollToBottom(true)">↓ scroll to bottom</button>
+
+<script>
+// ── State ──────────────────────────────────────────────────────────────────
+let sessionId = sessionStorage.getItem('wheeler_session_id') || null;
+let isBusy = false;
+let userScrolledUp = false;
+let ollamaOnline = false;
+let lastMessage = '';
+
+// ── Health check ──────────────────────────────────────────────────────────
+async function checkHealth() {
+  try {
+    const r = await fetch('/api/health');
+    const d = await r.json();
+    ollamaOnline = d.ollama;
+    setStatus(ollamaOnline ? 'ready' : 'offline');
+    document.getElementById('offlineBanner').classList.toggle('visible', !ollamaOnline);
+    if (d.default_model) document.getElementById('modelBadge').textContent = d.default_model;
+  } catch {
+    ollamaOnline = false;
+    setStatus('offline');
+    document.getElementById('offlineBanner').classList.add('visible');
+  }
+}
+
+function setStatus(state) {
+  const dot = document.getElementById('statusDot');
+  dot.className = 'status-dot';
+  if (state === 'busy') dot.classList.add('busy');
+  else if (state === 'error') dot.classList.add('error');
+  else if (state === 'offline') dot.classList.add('offline');
+  dot.title = state === 'ready' ? 'Ollama ready' : state === 'busy' ? 'Thinking...' : state === 'offline' ? 'Ollama offline' : 'Error';
+}
+
+// ── Scroll management ──────────────────────────────────────────────────────
+const chatArea = document.getElementById('chatArea');
+const scrollBtn = document.getElementById('scrollBtn');
+
+chatArea.addEventListener('scroll', () => {
+  const atBottom = chatArea.scrollHeight - chatArea.scrollTop - chatArea.clientHeight < 60;
+  userScrolledUp = !atBottom;
+  scrollBtn.classList.toggle('visible', userScrolledUp);
+});
+
+function scrollToBottom(force = false) {
+  if (force || !userScrolledUp) {
+    chatArea.scrollTop = chatArea.scrollHeight;
+    userScrolledUp = false;
+    scrollBtn.classList.remove('visible');
+  }
+}
+
+// ── Input auto-resize ──────────────────────────────────────────────────────
+const chatInput = document.getElementById('chatInput');
+chatInput.addEventListener('input', () => {
+  chatInput.style.height = 'auto';
+  chatInput.style.height = Math.min(chatInput.scrollHeight, 180) + 'px';
+});
+chatInput.addEventListener('keydown', e => {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    handleSend();
+  }
+});
+
+// ── Send message ──────────────────────────────────────────────────────────
+async function handleSend() {
+  const text = chatInput.value.trim();
+  if (!text || isBusy) return;
+  lastMessage = text;
+  chatInput.value = '';
+  chatInput.style.height = 'auto';
+  sendMessage(text);
+}
+
+async function sendMessage(text) {
+  setBusy(true);
+  appendUserMessage(text);
+
+  const assistantMsg = appendAssistantMessage();
+
+  try {
+    const resp = await fetch('/api/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message: text, session_id: sessionId }),
+    });
+
+    if (!resp.ok) {
+      showError(assistantMsg, `Server error ${resp.status}`, text);
+      setBusy(false);
+      return;
+    }
+
+    const reader = resp.body.getReader();
+    const decoder = new TextDecoder();
+    let buf = '';
+    let eventType = null;
+    let fullContent = '';
+    let thinkingBuf = '';
+    let thinkingCard = null;
+    let recallCard = null;
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buf += decoder.decode(value, { stream: true });
+
+      const lines = buf.split('\n');
+      buf = lines.pop(); // keep incomplete last line
+
+      for (const line of lines) {
+        if (line.startsWith('event: ')) {
+          eventType = line.slice(7).trim();
+        } else if (line.startsWith('data: ')) {
+          let data;
+          try { data = JSON.parse(line.slice(6)); } catch { continue; }
+          handleEvent(eventType, data, assistantMsg, {
+            get fullContent() { return fullContent; },
+            set fullContent(v) { fullContent = v; },
+            get thinkingBuf() { return thinkingBuf; },
+            set thinkingBuf(v) { thinkingBuf = v; },
+            get thinkingCard() { return thinkingCard; },
+            set thinkingCard(v) { thinkingCard = v; },
+            get recallCard() { return recallCard; },
+            set recallCard(v) { recallCard = v; },
+          });
+          eventType = null;
+        }
+      }
+    }
+
+  } catch (err) {
+    showError(assistantMsg, err.message || 'Connection failed', text);
+  }
+
+  setBusy(false);
+}
+
+// ── Event handler ─────────────────────────────────────────────────────────
+function handleEvent(type, data, msgEl, state) {
+  switch (type) {
+    case 'session':
+      if (data.session_id) {
+        sessionId = data.session_id;
+        sessionStorage.setItem('wheeler_session_id', sessionId);
+      }
+      break;
+
+    case 'recall_context': {
+      const mems = data.memories || [];
+      if (mems.length === 0) break;
+      const card = makeRecallCard(mems);
+      msgEl.querySelector('.message-bubble').appendChild(card);
+      state.recallCard = card;
+      scrollToBottom();
+      break;
+    }
+
+    case 'thinking': {
+      const content = data.content || '';
+      if (!content.trim()) break;
+      state.thinkingBuf += content;
+      if (!state.thinkingCard) {
+        const card = makeThinkingCard();
+        msgEl.querySelector('.message-bubble').appendChild(card);
+        state.thinkingCard = card;
+      }
+      state.thinkingCard.querySelector('.thinking-card-body').textContent = state.thinkingBuf;
+      scrollToBottom();
+      break;
+    }
+
+    case 'token': {
+      const content = data.content || '';
+      if (!content) break;
+      state.fullContent += content;
+      let textEl = msgEl.querySelector('.message-text');
+      if (!textEl) {
+        textEl = document.createElement('div');
+        textEl.className = 'message-text';
+        msgEl.querySelector('.message-bubble').appendChild(textEl);
+      }
+      textEl.textContent = state.fullContent;
+      scrollToBottom();
+      break;
+    }
+
+    case 'tool_call': {
+      const card = makeToolCard(data.name, data.args, null);
+      msgEl.querySelector('.message-bubble').appendChild(card);
+      msgEl._pendingTool = card;
+      scrollToBottom();
+      break;
+    }
+
+    case 'tool_result': {
+      const card = msgEl._pendingTool;
+      if (card) {
+        updateToolCard(card, data.result, data.ok);
+        msgEl._pendingTool = null;
+      }
+      scrollToBottom();
+      break;
+    }
+
+    case 'auto_store': {
+      const badge = document.createElement('div');
+      badge.className = 'store-badge';
+      badge.textContent = '◎ stored as memory';
+      msgEl.querySelector('.message-bubble').appendChild(badge);
+      break;
+    }
+
+    case 'done': {
+      const content = data.content || state.fullContent;
+      let textEl = msgEl.querySelector('.message-text');
+      if (!textEl) {
+        textEl = document.createElement('div');
+        textEl.className = 'message-text md';
+        msgEl.querySelector('.message-bubble').appendChild(textEl);
+      }
+      textEl.innerHTML = renderMarkdown(content);
+      textEl.classList.add('md');
+      scrollToBottom();
+      break;
+    }
+
+    case 'error': {
+      showError(msgEl, data.message || 'Unknown error', lastMessage);
+      break;
+    }
+  }
+}
+
+// ── DOM builders ──────────────────────────────────────────────────────────
+function appendUserMessage(text) {
+  const el = document.createElement('div');
+  el.className = 'message message-user';
+  el.innerHTML = `
+    <div class="message-avatar">You</div>
+    <div class="message-body">
+      <div class="message-bubble">
+        <div class="message-text">${escHtml(text)}</div>
+      </div>
+    </div>`;
+  document.getElementById('chatInner').appendChild(el);
+  scrollToBottom();
+  return el;
+}
+
+function appendAssistantMessage() {
+  const el = document.createElement('div');
+  el.className = 'message message-assistant';
+  el.innerHTML = `
+    <div class="message-avatar">W</div>
+    <div class="message-body">
+      <div class="message-bubble">
+        <div class="typing-indicator">
+          <div class="typing-dots">
+            <div class="typing-dot"></div>
+            <div class="typing-dot"></div>
+            <div class="typing-dot"></div>
+          </div>
+        </div>
+      </div>
+    </div>`;
+  document.getElementById('chatInner').appendChild(el);
+  scrollToBottom();
+
+  // Remove typing indicator once first content arrives
+  const observer = new MutationObserver(() => {
+    const bubble = el.querySelector('.message-bubble');
+    const ti = bubble.querySelector('.typing-indicator');
+    if (ti && bubble.children.length > 1) {
+      ti.remove();
+      observer.disconnect();
+    }
+  });
+  observer.observe(el.querySelector('.message-bubble'), { childList: true });
+
+  return el;
+}
+
+function makeRecallCard(memories) {
+  const card = document.createElement('div');
+  card.className = 'recall-card';
+
+  const tierConfig = [
+    { key: 'hot',  label: 'Strong',   color: 'var(--accent-cyan)'  },
+    { key: 'warm', label: 'Moderate', color: 'var(--accent-amber)' },
+    { key: 'cold', label: 'Faint',    color: 'var(--text-muted)'   },
+  ];
+  const grouped = {};
+  for (const m of memories) {
+    const t = m.tier || 'cold';
+    (grouped[t] = grouped[t] || []).push(m);
+  }
+
+  let items = '';
+  for (const { key, label, color } of tierConfig) {
+    const group = grouped[key] || [];
+    if (!group.length) continue;
+    items += `<div style="color:${color};font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.6px;padding:5px 0 2px">${label}</div>`;
+    for (const m of group) {
+      items += `<div class="recall-item">
+        <span class="recall-sim" style="color:${color}">${(m.similarity * 100).toFixed(0)}%</span>
+        <span class="recall-temp"> t=${m.temperature}</span>
+        &nbsp;${escHtml(m.text.length > 80 ? m.text.slice(0, 80) + '…' : m.text)}
+      </div>`;
+    }
+  }
+
+  card.innerHTML = `
+    <div class="recall-card-header" onclick="toggleCard(this.parentElement)">
+      <span>🧠</span>
+      <span>Recalled ${memories.length} memor${memories.length === 1 ? 'y' : 'ies'}</span>
+      <span class="recall-card-chevron">▾</span>
+    </div>
+    <div class="recall-card-body">${items}</div>`;
+  return card;
+}
+
+function makeThinkingCard() {
+  const card = document.createElement('div');
+  card.className = 'thinking-card';
+  card.innerHTML = `
+    <div class="thinking-card-header" onclick="toggleCard(this.parentElement)">
+      <span>💭</span>
+      <span>Thinking</span>
+      <span class="thinking-card-chevron">▾</span>
+    </div>
+    <div class="thinking-card-body"></div>`;
+  return card;
+}
+
+function makeToolCard(name, args, result) {
+  const card = document.createElement('div');
+  card.className = 'tool-card';
+  const label = toolLabel(name, args);
+  const argsStr = args ? JSON.stringify(args, null, 2) : '';
+  card.innerHTML = `
+    <div class="tool-card-header" onclick="toggleCard(this.parentElement)">
+      <span>${toolIcon(name)}</span>
+      <span>${escHtml(label)}</span>
+      <span class="tool-spinner" style="margin-left:4px;color:var(--text-muted)">…</span>
+      <span class="tool-card-chevron">▾</span>
+    </div>
+    <div class="tool-card-body">${escHtml(argsStr)}</div>`;
+  return card;
+}
+
+function updateToolCard(card, result, ok) {
+  const spinner = card.querySelector('.tool-spinner');
+  if (spinner) spinner.remove();
+  const header = card.querySelector('.tool-card-header');
+  const statusEl = document.createElement('span');
+  statusEl.textContent = ok ? ' ✓' : ' ✗';
+  statusEl.className = ok ? 'tool-ok' : 'tool-err';
+  header.insertBefore(statusEl, header.querySelector('.tool-card-chevron'));
+  if (result) {
+    const body = card.querySelector('.tool-card-body');
+    body.textContent = JSON.stringify(result, null, 2);
+  }
+}
+
+function showError(msgEl, message, retryText) {
+  const bubble = msgEl.querySelector('.message-bubble');
+  // Remove typing indicator if still present
+  const ti = bubble.querySelector('.typing-indicator');
+  if (ti) ti.remove();
+  const card = document.createElement('div');
+  card.className = 'error-card';
+  card.innerHTML = `
+    <span>${escHtml(message)}</span>
+    <button class="retry-btn" onclick="retryMessage(this, '${escHtml(retryText).replace(/'/g, "\\'")}')">Retry</button>`;
+  bubble.appendChild(card);
+  scrollToBottom();
+}
+
+function retryMessage(btn, text) {
+  const msgEl = btn.closest('.message-assistant');
+  if (msgEl) msgEl.remove();
+  sendMessage(text);
+}
+
+// ── Tool labels / icons ───────────────────────────────────────────────────
+function toolLabel(name, args) {
+  switch (name) {
+    case 'store_memory':   return `Store: "${truncate(args?.text, 40)}"`;
+    case 'recall_memory':  return `Recall: "${truncate(args?.query, 40)}"`;
+    case 'list_memories':  return 'List memories';
+    case 'forget_memory':  return `Forget: "${truncate(args?.text, 40)}"`;
+    case 'sleep_consolidate': return 'Sleep consolidation';
+    case 'polar_decay':    return `Polar decay: "${truncate(args?.text, 40)}"`;
+    case 'web_search':     return `Search: "${truncate(args?.query, 40)}"`;
+    default:               return name;
+  }
+}
+function toolIcon(name) {
+  const icons = {
+    store_memory: '◎', recall_memory: '🧠', list_memories: '📋',
+    forget_memory: '🗑', sleep_consolidate: '💤', polar_decay: '⚡',
+    web_search: '🔍',
+  };
+  return icons[name] || '⚙';
+}
+
+// ── Utility ────────────────────────────────────────────────────────────────
+function toggleCard(el) { el.classList.toggle('open'); }
+function truncate(s, n) { if (!s) return ''; return s.length > n ? s.slice(0, n) + '…' : s; }
+function escHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function setBusy(busy) {
+  isBusy = busy;
+  document.getElementById('sendBtn').disabled = busy;
+  setStatus(busy ? 'busy' : (ollamaOnline ? 'ready' : 'offline'));
+}
+
+function newChat() {
+  sessionId = null;
+  sessionStorage.removeItem('wheeler_session_id');
+  document.getElementById('chatInner').innerHTML = '';
+}
+
+// ── Minimal Markdown renderer ──────────────────────────────────────────────
+function renderMarkdown(text) {
+  // Escape HTML first (we'll selectively un-escape for markdown)
+  let s = text;
+
+  // Save code blocks before HTML escaping so their content stays raw
+  const codeBlocks = [];
+  s = s.replace(/```[\w]*\n?([\s\S]*?)```/g, (_, code) => {
+    const idx = codeBlocks.length;
+    codeBlocks.push(`<pre><code>${escHtml(code.trim())}</code></pre>`);
+    return `\x00CB${idx}\x00`;
+  });
+
+  // Save inline code too
+  s = s.replace(/`([^`]+)`/g, (_, c) => {
+    const idx = codeBlocks.length;
+    codeBlocks.push(`<code>${escHtml(c)}</code>`);
+    return `\x00CB${idx}\x00`;
+  });
+
+  // Now escape remaining HTML
+  s = s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+
+  // Headers
+  s = s.replace(/^### (.+)$/gm, '<h3>$1</h3>');
+  s = s.replace(/^## (.+)$/gm, '<h2>$1</h2>');
+  s = s.replace(/^# (.+)$/gm, '<h1>$1</h1>');
+
+  // HR
+  s = s.replace(/^---+$/gm, '<hr>');
+
+  // Bold and italic
+  s = s.replace(/\*\*\*(.+?)\*\*\*/g, '<strong><em>$1</em></strong>');
+  s = s.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+  s = s.replace(/\*(.+?)\*/g, '<em>$1</em>');
+
+  // Links
+  s = s.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
+
+  // Blockquotes (> is now &gt; after HTML escaping)
+  s = s.replace(/^&gt; (.+)$/gm, '<blockquote>$1</blockquote>');
+
+  // Unordered lists
+  s = s.replace(/^[\*\-] (.+)$/gm, '<li>$1</li>');
+  s = s.replace(/(<li>.*<\/li>\n?)+/g, m => `<ul>${m}</ul>`);
+
+  // Ordered lists
+  s = s.replace(/^\d+\. (.+)$/gm, '<li>$1</li>');
+
+  // Paragraphs (double newline → paragraph break)
+  s = s.replace(/\n\n+/g, '</p><p>');
+  s = '<p>' + s + '</p>';
+  s = s.replace(/<p><\/p>/g, '');
+  s = s.replace(/<p>(<h[123]>|<ul>|<ol>|<pre>|<blockquote>|<hr>)/g, '$1');
+  s = s.replace(/(<\/h[123]>|<\/ul>|<\/ol>|<\/pre>|<\/blockquote>|<hr>)<\/p>/g, '$1');
+
+  // Single newlines → <br> inside paragraphs
+  s = s.replace(/([^>])\n([^<])/g, '$1<br>$2');
+
+  // Restore code blocks
+  s = s.replace(/\x00CB(\d+)\x00/g, (_, i) => codeBlocks[parseInt(i)]);
+
+  return s;
+}
+
+// ── Init ──────────────────────────────────────────────────────────────────
+checkHealth();
+setInterval(checkHealth, 30000);
+chatInput.focus();
+</script>
+</body>
+</html>

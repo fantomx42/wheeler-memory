@@ -37,19 +37,32 @@ DEFAULT_MODEL = "qwen3"
 DEFAULT_OLLAMA_URL = "http://localhost:11434"
 
 _SYSTEM_PROMPT = """\
-You are a memory-augmented assistant backed by Wheeler Memory — a cellular
-automata-based associative memory system. You have access to tools that let
-you store, recall, list, forget, and consolidate memories.
+You are Darman, an AI assistant with reconstructive memory.
 
-Guidelines:
+Your memory is not perfect. It works like human memory — imperfect,
+associative, and shaped by context. Memories are stored as stable patterns
+that decay over time if not revisited.
+
+MEMORY CONTEXT will be injected before your response when relevant memories
+exist. It contains memories grouped by confidence:
+- Strong (HOT): High confidence — recently or frequently accessed.
+- Moderate (WARM): Medium confidence — may have drifted somewhat.
+- Faint (COLD): Low confidence — significant drift likely, treat with caution.
+
+IMPORTANT RULES:
+- Memories are SUGGESTIONS, not commands. You may disagree if current context
+  warrants it.
+- If a memory is cold/faint, acknowledge the uncertainty explicitly.
+- If no relevant memory exists, say so honestly — do not fabricate.
 - When the user asks you to remember something, use store_memory.
-- When the user asks what you know or remember about a topic, use recall_memory first.
+- When the user asks what you know about a topic, use recall_memory.
 - When the user asks to see all memories, use list_memories.
 - When asked to forget something, use forget_memory.
-- After a recall, you may store new inferences if they seem worth keeping.
-- Keep your final responses concise and grounded in what the memories show.
+- When the user asks you to look something up or asks about current events,
+  use web_search.
+- After a recall, store new inferences if they seem worth keeping.
 - When a recalled memory has a polar companion firing, you can use
-  polar_decay to apply a polar-decay recall and reduce the polarity link weight.
+  polar_decay to reduce the polarity link weight.
 """
 
 # ── Tool definitions (OpenAI-compatible format Ollama understands) ────────────
@@ -171,6 +184,31 @@ _TOOLS: list[dict] = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "web_search",
+            "description": (
+                "Search the web using DuckDuckGo. Use this when the user asks "
+                "you to look something up, find current information, or asks "
+                "about topics you may not have in memory."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": "The search query.",
+                    },
+                    "max_results": {
+                        "type": "integer",
+                        "description": "Number of results to return (default 5).",
+                    },
+                },
+                "required": ["query"],
+            },
+        },
+    },
 ]
 
 
@@ -264,6 +302,74 @@ def _exec_sleep_consolidate(data_dir: Path | None) -> str:
     })
 
 
+def _exec_web_search(query: str, max_results: int = 5) -> str:
+    """Search DuckDuckGo Lite and return structured results (no API key needed)."""
+    import urllib.parse
+    from html.parser import HTMLParser
+
+    url = "https://lite.duckduckgo.com/lite/?" + urllib.parse.urlencode({"q": query})
+    req = urllib.request.Request(
+        url,
+        headers={"User-Agent": "Mozilla/5.0 (compatible; Wheeler-Memory/0.1)"},
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            html = resp.read().decode("utf-8", errors="replace")
+    except Exception as exc:
+        return json.dumps({"error": f"Search failed: {exc}", "query": query})
+
+    class _DDGParser(HTMLParser):
+        """Parse DDG Lite result rows: each result is a <tr> with link + snippet cells."""
+        def __init__(self):
+            super().__init__()
+            self.results: list[dict] = []
+            self._in_link = False
+            self._in_snippet = False
+            self._cur: dict = {}
+
+        def handle_starttag(self, tag, attrs):
+            d = dict(attrs)
+            cls = d.get("class", "")
+            if tag == "a" and "result-link" in cls:
+                self._in_link = True
+                href = d.get("href", "")
+                if href.startswith("//"):
+                    href = "https:" + href
+                self._cur["url"] = href
+            elif tag == "td" and "result-snippet" in cls:
+                self._in_snippet = True
+                self._cur.setdefault("snippet", "")
+
+        def handle_data(self, data):
+            if self._in_link:
+                self._cur["title"] = self._cur.get("title", "") + data
+            elif self._in_snippet:
+                self._cur["snippet"] = self._cur.get("snippet", "") + data
+
+        def handle_endtag(self, tag):
+            if tag == "a" and self._in_link:
+                self._in_link = False
+                if self._cur.get("title") and self._cur.get("url"):
+                    self.results.append(dict(self._cur))
+                    self._cur = {}
+            elif tag == "td" and self._in_snippet:
+                self._in_snippet = False
+
+    parser = _DDGParser()
+    parser.feed(html)
+    results = [
+        {
+            "title": r.get("title", "").strip(),
+            "url": r.get("url", ""),
+            "snippet": r.get("snippet", "").strip(),
+        }
+        for r in parser.results
+        if r.get("title") and r.get("url")
+    ][:max_results]
+
+    return json.dumps({"query": query, "results": results})
+
+
 def _dispatch_tool(name: str, args: dict, data_dir: Path | None) -> str:
     """Execute a tool call and return its JSON string result."""
     try:
@@ -279,6 +385,8 @@ def _dispatch_tool(name: str, args: dict, data_dir: Path | None) -> str:
             return _exec_sleep_consolidate(data_dir)
         if name == "polar_decay":
             return _exec_polar_decay(args["text"], args.get("top_k", 5), data_dir)
+        if name == "web_search":
+            return _exec_web_search(args["query"], args.get("max_results", 5))
         return json.dumps({"error": f"Unknown tool: {name}"})
     except Exception as exc:
         return json.dumps({"error": str(exc)})
@@ -315,6 +423,104 @@ def _ollama_chat(
             f"Could not reach Ollama at {base_url}. "
             "Is it running? Try: ollama serve"
         ) from exc
+
+
+def _ollama_chat_stream(
+    messages: list[dict],
+    model: str,
+    tools: list[dict],
+    base_url: str,
+):
+    """POST /api/chat with stream=True and yield each parsed JSON chunk.
+
+    Ollama streams newline-delimited JSON objects. Each chunk has the shape:
+        {"message": {"role": "assistant", "content": "<token>"}, "done": false}
+    The final chunk has done=true and may include tool_calls in message.
+    """
+    payload = {
+        "model": model,
+        "messages": messages,
+        "tools": tools,
+        "stream": True,
+    }
+    data = json.dumps(payload).encode()
+    req = urllib.request.Request(
+        f"{base_url.rstrip('/')}/api/chat",
+        data=data,
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=120) as resp:
+            for raw_line in resp:
+                line = raw_line.strip()
+                if not line:
+                    continue
+                chunk = json.loads(line)
+                yield chunk
+                if chunk.get("done"):
+                    break
+    except urllib.error.URLError as exc:
+        raise RuntimeError(
+            f"Could not reach Ollama at {base_url}. "
+            "Is it running? Try: ollama serve"
+        ) from exc
+
+
+class _ThinkingFilter:
+    """Stateful filter that separates <think>...</think> blocks from regular tokens.
+
+    Call process(piece) for each incoming content chunk; it returns a list of
+    (event_type, content) tuples where event_type is "thinking" or "token".
+    Call flush() at the end to drain any buffered content.
+    """
+
+    _OPEN = "<think>"
+    _CLOSE = "</think>"
+
+    def __init__(self):
+        self._buf = ""
+        self._in_think = False
+
+    def process(self, piece: str) -> list[tuple[str, str]]:
+        events: list[tuple[str, str]] = []
+        self._buf += piece
+        while self._buf:
+            if self._in_think:
+                idx = self._buf.find(self._CLOSE)
+                if idx >= 0:
+                    events.append(("thinking", self._buf[:idx]))
+                    self._buf = self._buf[idx + len(self._CLOSE):]
+                    self._in_think = False
+                else:
+                    # Keep last (len(CLOSE)-1) chars in case tag spans chunks
+                    keep = len(self._CLOSE) - 1
+                    if len(self._buf) > keep:
+                        events.append(("thinking", self._buf[:-keep]))
+                        self._buf = self._buf[-keep:]
+                    break
+            else:
+                idx = self._buf.find(self._OPEN)
+                if idx >= 0:
+                    if idx > 0:
+                        events.append(("token", self._buf[:idx]))
+                    self._buf = self._buf[idx + len(self._OPEN):]
+                    self._in_think = True
+                else:
+                    keep = len(self._OPEN) - 1
+                    if len(self._buf) > keep:
+                        events.append(("token", self._buf[:-keep]))
+                        self._buf = self._buf[-keep:]
+                    break
+        return events
+
+    def flush(self) -> list[tuple[str, str]]:
+        if not self._buf:
+            return []
+        kind = "thinking" if self._in_think else "token"
+        events = [(kind, self._buf)]
+        self._buf = ""
+        return events
 
 
 # ── Agent class ───────────────────────────────────────────────────────────────
@@ -354,6 +560,8 @@ class WheelerAgent:
         auto_recall: bool = False,
         auto_store: bool = False,
         auto_recall_k: int = 3,
+        reconstruct: bool = True,
+        reconstruct_alpha: float = 0.3,
         verbose: bool = False,
     ) -> None:
         self.model = model
@@ -363,6 +571,8 @@ class WheelerAgent:
         self.auto_recall = auto_recall
         self.auto_store = auto_store
         self.auto_recall_k = auto_recall_k
+        self.reconstruct = reconstruct
+        self.reconstruct_alpha = reconstruct_alpha
         self.verbose = verbose
         self._history: list[dict] = []
 
@@ -372,20 +582,53 @@ class WheelerAgent:
 
     # ── Auto-memory helpers ───────────────────────────────────────────────────
 
-    def _build_recall_context(self, query: str) -> str | None:
-        """Return a formatted memory-context block, or None if nothing recalled."""
+    def _build_recall_context(self, query: str) -> tuple[str | None, list[dict]]:
+        """Return a (formatted context block, hits list) tuple.
+
+        The context block is None if nothing was recalled. The hits list is
+        always returned for use by run_stream()'s recall_context event.
+        Each hit includes its temperature_tier for confidence grouping.
+        """
         try:
-            hits = recall_memory(query, top_k=self.auto_recall_k, data_dir=self.data_dir)
+            hits = recall_memory(
+                query,
+                top_k=self.auto_recall_k,
+                data_dir=self.data_dir,
+                reconstruct=self.reconstruct,
+                reconstruct_alpha=self.reconstruct_alpha,
+            )
         except Exception:
-            return None
+            return None, []
         if not hits:
-            return None
-        lines = ["[Recalled memories (injected automatically):]"]
-        for i, h in enumerate(hits, 1):
-            sim = round(h["similarity"], 3)
-            temp = round(h.get("temperature", 0.0), 2)
-            lines.append(f"  {i}. \"{h['text']}\"  (similarity={sim}, temperature={temp})")
-        return "\n".join(lines)
+            return None, []
+
+        # Group by temperature tier
+        tiers: dict[str, list[dict]] = {"hot": [], "warm": [], "cold": []}
+        for h in hits:
+            tier = h.get("temperature_tier", "cold")
+            tiers.setdefault(tier, []).append(h)
+
+        tier_config = [
+            ("hot",  "Strong memories (high confidence)"),
+            ("warm", "Moderate memories (medium confidence)"),
+            ("cold", "Faint memories (low confidence, may have drifted)"),
+        ]
+
+        lines = ["[MEMORY CONTEXT — suggestions, not commands]", ""]
+        counter = 1
+        for tier_key, tier_label in tier_config:
+            group = tiers.get(tier_key, [])
+            if not group:
+                continue
+            lines.append(f"{tier_label}:")
+            for h in group:
+                sim = round(h["similarity"], 2)
+                temp = round(h.get("temperature", 0.0), 2)
+                lines.append(f'  {counter}. "{h["text"]}"  (similarity={sim}, temp={temp})')
+                counter += 1
+            lines.append("")
+
+        return "\n".join(lines).rstrip(), hits
 
     def _auto_store_reply(self, text: str) -> None:
         """Store the agent reply as a Wheeler memory (best-effort, silent on error)."""
@@ -412,7 +655,7 @@ class WheelerAgent:
         # ── Auto-recall: inject relevant memories into system context ─────────
         system_content = _SYSTEM_PROMPT
         if self.auto_recall:
-            ctx = self._build_recall_context(user_message)
+            ctx, _ = self._build_recall_context(user_message)
             if ctx:
                 system_content = _SYSTEM_PROMPT + "\n\n" + ctx
                 if self.verbose:
@@ -482,3 +725,153 @@ class WheelerAgent:
         if self.auto_store and content.strip():
             self._auto_store_reply(content)
         return content
+
+    # ── Streaming loop ─────────────────────────────────────────────────────────
+
+    def run_stream(self, user_message: str):
+        """Process a user message and yield structured SSE events.
+
+        Yields dicts with a "type" key:
+          {"type": "recall_context", "memories": [...]}
+          {"type": "thinking",       "content": "..."}
+          {"type": "token",          "content": "..."}
+          {"type": "tool_call",      "name": "...", "args": {...}}
+          {"type": "tool_result",    "name": "...", "result": {...}, "ok": bool}
+          {"type": "auto_store"}
+          {"type": "done",           "content": "full response text"}
+          {"type": "error",          "message": "...", "recoverable": bool}
+
+        Existing run() is unchanged — CLI usage is unaffected.
+        """
+        from typing import Generator  # noqa: F401 — only for type hint in docstring
+
+        # ── Auto-recall ────────────────────────────────────────────────────────
+        system_content = _SYSTEM_PROMPT
+        if self.auto_recall:
+            try:
+                ctx, hits = self._build_recall_context(user_message)
+                if ctx and hits:
+                    yield {
+                        "type": "recall_context",
+                        "memories": [
+                            {
+                                "text": h["text"],
+                                "similarity": round(h["similarity"], 3),
+                                "temperature": round(h.get("temperature", 0.0), 2),
+                                "tier": h.get("temperature_tier", "cold"),
+                            }
+                            for h in hits
+                        ],
+                    }
+                    system_content = _SYSTEM_PROMPT + "\n\n" + ctx
+            except Exception:
+                pass  # non-fatal — continue without recall context
+
+        self._history.append({"role": "user", "content": user_message})
+        messages = [{"role": "system", "content": system_content}] + self._history
+
+        full_response = ""
+
+        for _ in range(self.max_tool_rounds):
+            accumulated = ""
+            token_only = ""
+            tool_calls: list[dict] = []
+            tf = _ThinkingFilter()
+
+            try:
+                for chunk in _ollama_chat_stream(
+                    messages=messages,
+                    model=self.model,
+                    tools=_TOOLS,
+                    base_url=self.ollama_url,
+                ):
+                    msg = chunk.get("message", {})
+                    piece = msg.get("content", "")
+
+                    if chunk.get("done"):
+                        # Flush any buffered partial content
+                        for etype, econtent in tf.flush():
+                            if econtent:
+                                yield {"type": etype, "content": econtent}
+                                if etype == "token":
+                                    accumulated += econtent
+                                    token_only += econtent
+                        tool_calls = msg.get("tool_calls") or []
+                        break
+
+                    if piece:
+                        accumulated += piece
+                        for etype, econtent in tf.process(piece):
+                            if econtent:
+                                yield {"type": etype, "content": econtent}
+                                if etype == "token":
+                                    token_only += econtent
+
+            except RuntimeError as exc:
+                yield {"type": "error", "message": str(exc), "recoverable": False}
+                return
+
+            if not tool_calls:
+                # Final text response — no tools were called
+                full_response = accumulated
+                self._history.append({"role": "assistant", "content": full_response})
+                messages.append({"role": "assistant", "content": full_response})
+                if self.auto_store and token_only.strip():
+                    try:
+                        self._auto_store_reply(token_only)
+                        yield {"type": "auto_store"}
+                    except Exception:
+                        pass
+                yield {"type": "done", "content": token_only}
+                return
+
+            # ── Tool calls ─────────────────────────────────────────────────────
+            messages.append({
+                "role": "assistant",
+                "content": accumulated,
+                "tool_calls": tool_calls,
+            })
+            for tc in tool_calls:
+                fn = tc.get("function", {})
+                name = fn.get("name", "")
+                raw_args = fn.get("arguments", {})
+                args = raw_args if isinstance(raw_args, dict) else json.loads(raw_args)
+
+                yield {"type": "tool_call", "name": name, "args": args}
+
+                result_str = _dispatch_tool(name, args, self.data_dir)
+                try:
+                    result_obj = json.loads(result_str)
+                except Exception:
+                    result_obj = {"raw": result_str}
+                ok = "error" not in result_obj
+
+                yield {"type": "tool_result", "name": name, "result": result_obj, "ok": ok}
+
+                messages.append({"role": "tool", "content": result_str})
+
+        # Fallback: ask for final answer without tools (non-streaming is fine here)
+        messages.append({
+            "role": "user",
+            "content": "(Please give your final answer now — no more tool calls needed.)",
+        })
+        try:
+            resp = _ollama_chat(
+                messages=messages,
+                model=self.model,
+                tools=[],
+                base_url=self.ollama_url,
+            )
+        except RuntimeError as exc:
+            yield {"type": "error", "message": str(exc), "recoverable": False}
+            return
+        content = resp.get("message", {}).get("content", "")
+        self._history.append({"role": "assistant", "content": content})
+        if self.auto_store and content.strip():
+            try:
+                self._auto_store_reply(content)
+                yield {"type": "auto_store"}
+            except Exception:
+                pass
+        yield {"type": "token", "content": content}
+        yield {"type": "done", "content": content}

@@ -1,8 +1,17 @@
-"""Wheeler Memory Web UI — single-command local server."""
+"""Wheeler Memory Web UI — single-command local server.
+
+Serves two interfaces:
+  /         — memory dashboard (store, recall, inspect)
+  /chat     — LLM chat interface with streaming, memory tools, and web search
+"""
 
 import json
 import sys
 import threading
+import time
+import uuid
+import urllib.request
+import urllib.error
 import webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -14,10 +23,52 @@ from wheeler_memory.eviction import forget_by_text
 from wheeler_memory.consolidation import sleep_consolidate
 from wheeler_memory.chunking import select_chunk
 from wheeler_memory.hashing import text_to_hex
+from wheeler_memory.agent import WheelerAgent
 import numpy as np
 
 PORT = 7437
 UI_FILE = Path(__file__).parent.parent / "ui" / "dashboard.html"
+CHAT_FILE = Path(__file__).parent.parent / "ui" / "chat.html"
+
+# ── Chat session management ────────────────────────────────────────────────────
+
+_sessions: dict[str, dict] = {}  # session_id -> {"agent": WheelerAgent, "last_active": float, "lock": Lock}
+_sessions_lock = threading.Lock()
+_SESSION_TTL = 3600  # 1 hour
+
+DEFAULT_MODEL = "qwen3"
+DEFAULT_OLLAMA_URL = "http://localhost:11434"
+
+
+def _get_or_create_session(session_id: str | None) -> tuple[str, dict]:
+    """Return (session_id, session_dict), creating a new session if needed."""
+    with _sessions_lock:
+        if session_id and session_id in _sessions:
+            sess = _sessions[session_id]
+            sess["last_active"] = time.time()
+            return session_id, sess
+        sid = session_id or str(uuid.uuid4())
+        agent = WheelerAgent(
+            model=DEFAULT_MODEL,
+            ollama_url=DEFAULT_OLLAMA_URL,
+            auto_recall=True,
+            auto_store=True,
+        )
+        sess = {
+            "agent": agent,
+            "last_active": time.time(),
+            "lock": threading.Lock(),
+        }
+        _sessions[sid] = sess
+        return sid, sess
+
+
+def _reap_stale_sessions() -> None:
+    now = time.time()
+    with _sessions_lock:
+        stale = [k for k, v in _sessions.items() if now - v["last_active"] > _SESSION_TTL]
+        for k in stale:
+            del _sessions[k]
 
 SEED_MEMORIES = [
     "cellular automata evolve through local neighbor rules toward stable attractors",
@@ -73,6 +124,32 @@ class WheelerHandler(BaseHTTPRequestHandler):
             self.send_header("Content-Length", str(len(content)))
             self.end_headers()
             self.wfile.write(content)
+            return
+
+        if path == "/chat":
+            if not CHAT_FILE.exists():
+                self.send_error_json("chat.html not found", 404)
+                return
+            content = CHAT_FILE.read_bytes()
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Content-Length", str(len(content)))
+            self.end_headers()
+            self.wfile.write(content)
+            return
+
+        if path == "/api/health":
+            try:
+                req = urllib.request.Request(
+                    f"{DEFAULT_OLLAMA_URL}/api/tags",
+                    headers={"Content-Type": "application/json"},
+                )
+                with urllib.request.urlopen(req, timeout=3) as resp:
+                    data = json.loads(resp.read())
+                models = [m.get("name", "") for m in data.get("models", [])]
+                self.send_json({"ollama": True, "models": models, "default_model": DEFAULT_MODEL})
+            except Exception:
+                self.send_json({"ollama": False, "models": [], "default_model": DEFAULT_MODEL})
             return
 
         if path == "/api/memories":
@@ -190,6 +267,51 @@ class WheelerHandler(BaseHTTPRequestHandler):
                 })
             except Exception as e:
                 self.send_error_json(str(e), 500)
+            return
+
+        if path == "/api/chat":
+            message = body.get("message", "").strip()
+            if not message:
+                self.send_error_json("message required")
+                return
+
+            session_id = body.get("session_id") or None
+            _reap_stale_sessions()
+            sid, sess = _get_or_create_session(session_id)
+
+            # SSE headers
+            self.send_response(200)
+            self.send_header("Content-Type", "text/event-stream")
+            self.send_header("Cache-Control", "no-cache")
+            self.send_header("Connection", "keep-alive")
+            self.send_header("X-Accel-Buffering", "no")
+            self.end_headers()
+
+            def send_event(event_type: str, data: dict) -> bool:
+                """Write one SSE frame. Returns False if client disconnected."""
+                try:
+                    frame = (
+                        f"event: {event_type}\n"
+                        f"data: {json.dumps(data)}\n\n"
+                    ).encode()
+                    self.wfile.write(frame)
+                    self.wfile.flush()
+                    return True
+                except (BrokenPipeError, ConnectionResetError, OSError):
+                    return False
+
+            # First event: confirm session ID to client
+            if not send_event("session", {"session_id": sid}):
+                return
+
+            agent: WheelerAgent = sess["agent"]
+            with sess["lock"]:
+                try:
+                    for event in agent.run_stream(message):
+                        if not send_event(event["type"], event):
+                            break  # client disconnected
+                except Exception as exc:
+                    send_event("error", {"message": str(exc), "recoverable": False})
             return
 
         self.send_error_json("not found", 404)

@@ -38,13 +38,27 @@ Open **http://localhost:7437** in your browser. That's it.
 
 ---
 
-## Want Fuzzy Search?
+## Two Recall Modes
+
+**By default**, Wheeler uses SHA-256 hashing. This is deterministic — the same text always produces the same fingerprint. But changing even one word produces a completely different pattern. Searching "shopping list" won't find "remind me to buy groceries."
+
+**For meaning-based search**, install the embedding extra:
 
 ```bash
 pip install -e ".[embed]"
 ```
 
-This enables `--embed` / semantic search — finds memories by meaning, not just exact wording. (Pulls in `sentence-transformers` + PyTorch, ~1–2 GB.)
+Then use `--embed` when storing and recalling:
+
+```bash
+wheeler-store --embed "remind me to buy groceries"
+wheeler-recall --embed "shopping list"   # finds it
+```
+
+This uses a sentence-transformer model to produce similar fingerprints for similar meanings. (Pulls in `sentence-transformers` + PyTorch, ~1–2 GB.)
+
+> **Important**: Both store AND recall must use `--embed` for semantic search to work.
+> Memories stored without `--embed` can only be recalled without it, and vice versa.
 
 ---
 
@@ -88,6 +102,7 @@ The cellular automaton uses a 3-state rule: local peaks push toward +1, valleys 
 - [CLI Reference](docs/cli.md) — every flag documented
 - [Architecture](docs/architecture.md) — CA dynamics, temperature system, chunked storage, the math
 - [Concepts](docs/concepts.md) — theoretical foundation, reconstructive recall, semantic vs exact search
+- [Design Principles](docs/design.md) — the rules that guide design decisions; the Darman philosophy
 - [API Reference](docs/api.md) — Python library usage
 - [GPU Acceleration](docs/gpu.md) — HIP/ROCm and CUDA setup
 - [Web UI](ui/README.md) — dashboard details
