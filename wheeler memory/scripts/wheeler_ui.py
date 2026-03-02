@@ -283,7 +283,7 @@ class WheelerHandler(BaseHTTPRequestHandler):
             self.send_response(200)
             self.send_header("Content-Type", "text/event-stream")
             self.send_header("Cache-Control", "no-cache")
-            self.send_header("Connection", "keep-alive")
+            self.send_header("Connection", "close")
             self.send_header("X-Accel-Buffering", "no")
             self.end_headers()
 
@@ -330,7 +330,7 @@ def main():
         print(f"ERROR: port {PORT} already in use.", file=sys.stderr)
         sys.exit(1)
 
-    url = f"http://localhost:{PORT}"
+    url = f"http://localhost:{PORT}/chat"
     print(f"Wheeler Memory  →  {url}\nCtrl+C to stop.")
     threading.Thread(
         target=lambda: (__import__("time").sleep(0.5), webbrowser.open(url)),
