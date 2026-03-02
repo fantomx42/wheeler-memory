@@ -609,15 +609,22 @@ class WheelerAgent:
 
         return "\n".join(lines).rstrip(), hits
 
-    def _auto_store_reply(self, text: str) -> None:
-        """Store the agent reply as a Wheeler memory (best-effort, silent on error)."""
+    def _auto_store_reply(self, text: str) -> bool:
+        """Store the agent reply as a Wheeler memory (best-effort).
+
+        Returns True if stored, False if skipped or failed.
+        """
+        if len(text) < 200:
+            return False
         try:
             _exec_store_memory(text, self.data_dir)
             if self.verbose:
                 print(f"[auto-store] stored reply ({len(text)} chars)")
+            return True
         except Exception as exc:
             if self.verbose:
                 print(f"[auto-store] failed: {exc}")
+            return False
 
     # ── Main loop ─────────────────────────────────────────────────────────────
 
@@ -796,11 +803,8 @@ class WheelerAgent:
                 self._history.append({"role": "assistant", "content": full_response})
                 messages.append({"role": "assistant", "content": full_response})
                 if self.auto_store and token_only.strip():
-                    try:
-                        self._auto_store_reply(token_only)
+                    if self._auto_store_reply(token_only):
                         yield {"type": "auto_store"}
-                    except Exception:
-                        pass
                 yield {"type": "done", "content": token_only}
                 return
 
@@ -847,10 +851,7 @@ class WheelerAgent:
         content = resp.get("message", {}).get("content", "")
         self._history.append({"role": "assistant", "content": content})
         if self.auto_store and content.strip():
-            try:
-                self._auto_store_reply(content)
+            if self._auto_store_reply(content):
                 yield {"type": "auto_store"}
-            except Exception:
-                pass
         yield {"type": "token", "content": content}
         yield {"type": "done", "content": content}
